@@ -1,0 +1,2 @@
+--DBCC PERFMON('sys.dm_os_latch_stats', CLEAR)
+--DBCC PERFMON('sys.dm_os_wait_stats' , CLEAR)

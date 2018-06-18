@@ -1,0 +1,18 @@
+
+SELECT
+   Scheduled_or_manual = 
+      CASE 
+         WHEN PATINDEX('%The Job was invoked by user%',[message]) > 0 THEN 'manual'
+         WHEN PATINDEX('%The Job was invoked by schedule%',[message]) > 0 THEN 'scheduled'
+      ELSE 'other'
+      END 
+   , [user] = 
+      CASE 
+         WHEN PATINDEX('%The Job was invoked by user%', [message]) > 0 THEN RIGHT(SUBSTRING([message], PATINDEX('%The Job was invoked by user%',[message]), 36), 8)
+         WHEN PATINDEX('%The Job was invoked by schedule%',[message]) > 0 THEN 'schedule'
+      ELSE NULL
+      END
+   , *
+FROM msdb..sysjobhistory
+ORDER BY run_date DESC, run_time DESC, step_id DESC
+
