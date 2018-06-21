@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets>
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>cur</Title>
+      <Shortcut>cur</Shortcut>
+      <Description />
+      <Author />
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations />
+      <Code Language="sql"><![CDATA[DECLARE @columnName varchar(100);
+
+DECLARE C CURSOR FAST_FORWARD READ_ONLY FOR
+SELECT COLUMN_NAME
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = '<schema_name, sysname, schema_name>' AND TABLE_NAME = '<table_name, sysname, table_name>'
+AND IS_NULLABLE = 'NO'
+
+OPEN C
+FETCH NEXT FROM C INTO @columnName
+WHILE @@FETCH_STATUS = 0
+BEGIN
+	$CURSOR$
+   FETCH NEXT FROM C INTO @columnName
+END
+CLOSE C
+DEALLOCATE C]]></Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets>
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>idx</Title>
+      <Shortcut>idx</Shortcut>
+      <Description />
+      <Author />
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations />
+      <Code Language="sql"><![CDATA[CREATE CLUSTERED INDEX IX_temp ON $CURSOR$ (columnName)
+WITH (DATA_COMPRESSION = PAGE, ALLOW_ROW_LOCKS = OFF, ALLOW_PAGE_LOCKS = OFF, SORT_IN_TEMPDB = ON, FILLFACTOR = 100);]]></Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

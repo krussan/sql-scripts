@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets>
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>try</Title>
+      <Shortcut>try</Shortcut>
+      <Description />
+      <Author />
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations />
+      <Code Language="sql"><![CDATA[BEGIN TRY
+	$CURSOR$
+END TRY
+BEGIN CATCH
+   IF @@TRANCOUNT > 0
+      ROLLBACK TRAN;
+      
+   THROW
+   
+END CATCH]]></Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

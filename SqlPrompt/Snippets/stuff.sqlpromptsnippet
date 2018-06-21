@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets>
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>stuff</Title>
+      <Shortcut>stuff</Shortcut>
+      <Description />
+      <Author />
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations />
+      <Code Language="sql"><![CDATA[	SELECT @columnList = stuff(
+		(SELECT N',' + quotename(sourceColumnName) + ' varchar(4000)' as [text()] 
+		FROM (
+		SELECT value AS sourceColumnName FROM DWH_TOOLKIT.DWH.listToTable(@csvColumnList, @columnDelimiter)
+	) AS importColumns
+	FOR XML PATH('')),1,1,N'');]]></Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>
