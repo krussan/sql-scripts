@@ -1,0 +1,16 @@
+-f:liqbase.build
+-D:source.server=DIEKIRCH
+-D:folder.redgate.base=C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication
+-D:option.deploy=false 
+-D:target.server=.\\SQLEXPRESS
+-D:target.username=liquibase
+-D:target.password=liquibase
+-D:loglevel=info
+-D:option.dropdatabase=true
+-D:target.datapath=C:\DATA\LOCAL\
+-D:option.commit=false
+-D:checkin.comment="Initial liquibase migration"
+-D:folder.repo.base=C:\Git\DBApplication
+-D:redgate.suffix=
+-D:list.packages=DBApplication|DBApplication:DBApplication
+build-packages

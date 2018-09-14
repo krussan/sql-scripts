@@ -29,6 +29,11 @@ $so.Permissions = $false;
 $so.ScriptDataCompression = $true;
 $so.Triggers = $true;
 $so.XmlIndexes = $true;
+$so.AllowSystemObjects = $false;
+$so.AnsiFile = $false;
+$so.AnsiPadding = $false;
+$so.ScriptBatchTerminator = $true;
+
 
 $db = $srv.Databases[$database]
 

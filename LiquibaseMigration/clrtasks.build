@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<project name="Simple" default="build">
+   <script language="C#">
+	  <references>
+		<include name="System.Xml.dll" />
+		<include name="System.dll" />
+	  </references>
+	  <imports>
+		<import namespace="System" />	  
+		<import namespace="System.IO" />
+		<import namespace="System.Xml" />
+		<import namespace="System.Globalization" />
+		<import namespace="System.Text.RegularExpressions" />
+		<import namespace="NAnt.Core.Attributes" />
+      </imports>   
+      <code><![CDATA[
+	  
+	[TaskName("regexreplace")]
+    public class RegexReplacement : Task
+    {
+	    private RegexOptions _options = RegexOptions.None;
+
+        [TaskAttribute("pattern", Required = true)]
+        public string Pattern { get; set; }
+
+        [TaskAttribute("input", Required = true)]
+        public string Input { get; set; }
+
+        [TaskAttribute("replacement", Required = true)]
+        public string Replacement { get; set; }
+
+        [TaskAttribute("property", Required = true)]
+        public string TargetProperty { get; set; }
+
+		[TaskAttribute("options", Required=false)]
+        [StringValidator(AllowEmpty=true)]
+        public RegexOptions Options {
+            get { return _options;}
+            set { _options = value; }
+        }	
+		
+        protected override void ExecuteTask() {
+            Regex regex = null;
+
+            try {
+                regex = new Regex(Pattern, Options);
+            } catch (ArgumentException ex) {
+                throw new Exception(ex.ToString());
+            }
+
+            Properties[this.TargetProperty] = regex.Replace(this.Input, this.Replacement);
+        }
+    }
+	
+	[TaskName("regexnrofmatches")]
+    public class RegexNrOfMatches : Task
+    {
+	    private RegexOptions _options = RegexOptions.None;
+
+        [TaskAttribute("pattern", Required = true)]
+        public string Pattern { get; set; }
+
+        [TaskAttribute("input", Required = true)]
+        public string Input { get; set; }
+
+        [TaskAttribute("property", Required = true)]
+        public string TargetProperty { get; set; }
+
+		[TaskAttribute("options", Required=false)]
+        [StringValidator(AllowEmpty=true)]
+        public RegexOptions Options {
+            get { return _options;}
+            set { _options = value; }
+        }	
+		
+        protected override void ExecuteTask() {
+            Regex regex = null;
+
+            try {
+                regex = new Regex(Pattern, Options);
+				
+				MatchCollection coll = regex.Matches(this.Input);
+				
+				Properties[this.TargetProperty] = coll.Count.ToString();
+				
+            } catch (ArgumentException ex) {
+                throw new Exception(ex.ToString());
+            }
+
+        }
+    }
+
+	[TaskName("replaceiterator")]
+    public class ReplaceIterator : Task
+    {
+	    private RegexOptions _options = RegexOptions.None;
+
+        [TaskAttribute("pattern", Required = true)]
+        public string Pattern { get; set; }
+
+        [TaskAttribute("input", Required = true)]
+        public string Input { get; set; }
+
+        [TaskAttribute("property", Required = true)]
+        public string TargetProperty { get; set; }
+
+		[TaskAttribute("options", Required=false)]
+        [StringValidator(AllowEmpty=true)]
+        public RegexOptions Options {
+            get { return _options;}
+            set { _options = value; }
+        }
+		
+        protected override void ExecuteTask() {
+            Regex regex = null;
+
+            try {
+                regex = new Regex(Pattern, Options);
+            } catch (ArgumentException ex) {
+                throw new Exception(ex.ToString());
+            }
+
+			int count = 1;
+            Properties[this.TargetProperty] = regex.Replace(this.Input, m => Convert.ToString(count++));
+        }
+    }
+	
+	[TaskName("regexmatches")]
+    public class RegexMatches : TaskContainer
+    {
+		private string _pattern;
+        private string _input;
+        private RegexOptions _options = RegexOptions.None;
+		
+		[TaskAttribute("pattern", Required=true)]
+        [StringValidator(AllowEmpty=false)]
+        public string Pattern {
+            get { return _pattern;}
+            set { _pattern = value; }
+        }
+		
+		[TaskAttribute("options", Required=false)]
+        [StringValidator(AllowEmpty=true)]
+        public RegexOptions Options {
+            get { return _options;}
+            set { _options = value; }
+        }		
+		
+		[TaskAttribute("input", Required=true)]
+        [StringValidator(AllowEmpty=true)]
+        public string Input {
+            get { return _input;}
+            set { _input = value; }
+        }
+				
+        protected override void ExecuteTask() {
+            Regex regex = null;
+
+            try {
+                regex = new Regex(Pattern, Options);
+            } catch (ArgumentException ex) {
+                throw new Exception(ex.ToString());
+            }
+
+            MatchCollection matches = regex.Matches(Input);
+
+            if (matches.Count == 0) {
+				throw new Exception("No matches found");
+            }
+			
+			foreach (Match m in matches) {
+				DoWork(m, regex);
+			}			
+        }
+		
+		protected virtual void DoWork(Match match, Regex regex) {
+			// we start the iteration at 1, since the collection of groups 
+            // always starts with a group which matches the entire input and 
+            // is named '0', this group is of no interest to us
+            for (int i = 1; i < match.Groups.Count; i++) {
+                string groupName = regex.GroupNameFromNumber(i);
+
+                Log(Level.Verbose, "Setting property '{0}' to '{1}'.", 
+                    groupName, match.Groups[groupName].Value);
+                Properties[groupName] = match.Groups[groupName].Value;
+            }
+			
+            base.ExecuteTask();
+        }		
+    }
+	
+]]>
+      </code>
+    </script>
+
+</project>

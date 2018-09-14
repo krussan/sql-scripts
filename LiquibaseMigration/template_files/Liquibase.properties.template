@@ -1,0 +1,5 @@
+#Liquibase.properties
+driver: com.microsoft.sqlserver.jdbc.SQLServerDriver
+url: jdbc:sqlserver://SERVER_NAME:1433;databaseName=DB_NAME;
+username: sa
+password: hemligt
