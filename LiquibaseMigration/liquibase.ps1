@@ -1,4 +1,8 @@
 
+$ListFolderBase = ("Deploy", "Assemblies", "Data", "Database Triggers", "Defaults", "Extended Properties", "Functions", "Rules", "Search property Lists", "Security", "Security\Asymmetric Keys", "Security\Certificates", "Security\Roles", "Security\Schemas", "Security\Symmetric Keys", "Sequences", "Service Broker\Contracts", "Service Broker\Event Notifications", "Service Broker\Message Types", "Service Broker\Queues", "Service Broker\Remote Service Bindings", "Service Broker\Routes", "Service Broker\Services", "Storage", "Storage\Full Text Catalogs", "Storage\Full Text Stoplists", "Storage\Partition Functions", "Storage\Partition Schemes", "Storage\File Groups", "Stored Procedures", "Synonyms", "Tables", "Table triggers", "View triggers", "Types", "Types\User-defined Data Types", "Types\XML Schema Collections", "Views", "ConstraintFunctions")
+
+$ListFolderUsers = ("Security\Users")
+
 function build(
 	[string]$database,
 	[string]$sourcePath,
@@ -8,6 +12,45 @@ function build(
 	write-host "Database name :: $database"
 	write-host "Source folder :: $sourcePath"
 	write-host "Repo path :: $repoPath"
+}
+
+function getFolders([bool]$includeUsers) {
+	$dirs = $ListFolderBase
+	
+	if ($includeUsers) {
+		$dirs = $dirs + $ListFolderUsers
+	}
+	
+	return $dirs;
+}
+
+function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[string]$packageName,[string]$databaseName,[bool]$includeUsers) {
+	$dirs = getFolders $includeUsers
+	
+	Remove-Item -Path $buildFolder -Force -Recurse | out-null
+	New-Item -ItemType Directory -Path $buildFolder | out-null
+	
+	Write-Host "Creating basic files...`n`n"	
+	Copy-Item -Path "template_files\deploymaster_redgate.xml" -Destination "$buildFolder\update.xml"
+	Copy-Item -Path "template_files\Liquibase.properties.template" -Destination "$buildFolder\liquibase.properties"
+	Copy-Item -Path "template_files\run_liquibase.bat" -Destination "$buildFolder"
+	Copy-Item -Path "template_files\assembly.xml" -Destination "$buildFolderParent"
+	
+	(Get-Content template_files\pom.xml).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId).replace("@DATABASENAME@", $databaseName)  | Set-Content -Path "$buildFolder\pom.xml" -Encoding UTF8
+
+	Write-Host "Adding liquibase binaries...`n`n"	
+	Copy-Item -Path "template_files\liquibase-app\lib\sqljdbc41.jar" -Destination "$buildFolderParent"
+	
+	Write-Host "Creating directories and xml structures...`n`n"	
+	foreach ($d in $dirs) {
+		Write-Host "Creating directory :: $buildFolder\$d"
+		New-Item -ItemType Directory -Path "$buildFolder\$d" | out-null
+		Copy-Item -Path "template_files\submaster.xml" -Destination "$buildFolder\$d\master.xml"
+	}
+	
+	Get-ChildItem $buildFolderParent -Recurse |
+		Where-Object {$_.GetType().ToString() -eq "System.IO.FileInfo"} |
+		Set-ItemProperty -Name IsReadOnly -Value $false
 }
 
 
@@ -59,48 +102,15 @@ function buildPackages(
 	}
 }
 
-buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
+function setupRedgateStyle([string]$buildFolder,[bool]$includeUsers) {
+	$cc = 0;
+	
+	$dirs = getFolders $includeUsers
+	foreach ($folder in $dirs) {
+		$masterDataFile = "$buildFolder\$folder\master.xml"
+	}
+	
+}
 
-
-  # <target name="build-packages">
-    # <foreach item="String" in="${list.packages}" delim=";" property="param.package">
-      # <regex input="${param.package}" pattern="(?'packagename'.*?)\|(?'databases'.*)" />
-      # <echo message="package :: ${packagename}" />
-      # <echo message="databases :: ${databases}" />
-
-      # <property name="modules" value="" />
-      # <foreach item="String" in="${databases}" delim="," property="database.module">
-        # <regex input="${database.module}" pattern="(?'database'.*?)\:(?'module'.*)" />
-
-        # <property name="modules" value="&lt;module&gt;${module}\db&lt;/module&gt;&#xa;   ${modules}" />
-      # </foreach>
-
-      # <echo message="databases :: ${databases}" />
-      # <echo message="modules :: ${modules}" />
-      
-      # <copy file="${directory::get-current-directory()}\template_files\parentpom.xml" tofile="${folder.repo.base}\pom.xml">
-        # <filterchain>
-          # <replacetokens>
-            # <token key="MODULES" value="${modules}" />
-            # <token key="PACKAGE" value="${string::to-lower(packagename)}" />
-          # </replacetokens>
-        # </filterchain>
-      # </copy>
-
-      # <foreach item="String" in="${databases}" delim="," property="database.application">
-        # <regex input="${database.application}" pattern="(?'database'.*?)\:(?'module'.*)" />
-
-        # <property name="database.name" value="${database}" />
-        # <property name="folder.redgate" value="${folder.redgate.base}\${database.name}${redgate.suffix}" />
-        # <property name="repo.localpath" value="${folder.repo.base}\${packagename}\Application\${module}\db" />
-
-        # <echo message="&#xa;---------------------------------------------------------&#xa;" />
-        # <echo message="Database name :: ${database.name}" />
-        # <echo message="Redgate folder :: ${folder.redgate}" />
-        # <echo message="Repo path :: ${repo.localpath}" />
-
-        # <call target="build" />
-      # </foreach>
-
-    # </foreach>
-  # </target>
+#buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
+init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
