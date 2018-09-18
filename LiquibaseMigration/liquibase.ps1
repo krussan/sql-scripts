@@ -102,15 +102,47 @@ function buildPackages(
 	}
 }
 
+function getUser([string]$folder) {
+	if ($folder -eq "Stored Procedures") {
+		$user = "proc"
+	}
+	elseif ($folder -eq "Functions") {
+		$user = "func"
+	}
+	elseif ($folder -eq "Views") {
+		$user = "view"
+	}
+	else {
+		$user = $env.UserName
+	}
+	
+	return $user
+}
+
 function setupRedgateStyle([string]$buildFolder,[bool]$includeUsers) {
 	$cc = 0;
 	
 	$dirs = getFolders $includeUsers
 	foreach ($folder in $dirs) {
 		$masterDataFile = "$buildFolder\$folder\master.xml"
+		
+		$user = getUser $folder
+		$header = @"
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+	
+	<!-- START OF FILE LIST -->
+"@
+		New-Item -Path $masterDataFile -Value $header
 	}
 	
 }
 
 #buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
-init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
+#init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
+setupRedgateStyle "build\db\DBApplication" $false
