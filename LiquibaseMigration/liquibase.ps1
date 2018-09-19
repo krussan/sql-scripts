@@ -315,11 +315,11 @@ function handleInvalidObjects([string]$buildFolder) {
 function handleCheckConstraints([string]$server,[string]$database) {
 	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
-		-Query "SET NOCOUNT ON;SELECT definition FROM sys.check_constraints UNION ALL SELECT definition FROM sys.default_constraints" `
+		-Query "SELECT objectName = OBJECT_SCHEMA_NAME(parent_object_id) + '.' + OBJECT_NAME(parent_object_id) + '.sql' FROM sys.check_constraints" `
 		-OutputAs DataRows
 		
 	foreach ($r in $rows) {
-		write-host $r.definition
+		write-host $r.objectName
 	}
 }
 
