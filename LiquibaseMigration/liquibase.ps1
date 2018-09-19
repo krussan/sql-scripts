@@ -3,6 +3,8 @@ $ListFolderBase = ("Deploy", "Assemblies", "Data", "Database Triggers", "Default
 
 $ListFolderUsers = ("Security\Users")
 
+
+
 function build(
 	[string]$database,
 	[string]$sourcePath,
@@ -119,12 +121,14 @@ function getUser([string]$folder) {
 	return $user
 }
 
-function setupRedgateStyle([string]$buildFolder,[bool]$includeUsers) {
+function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includeUsers) {
 	$cc = 0;
 	
 	$dirs = getFolders $includeUsers
 	foreach ($folder in $dirs) {
 		$masterDataFile = "$buildFolder\$folder\master.xml"
+		
+		write-host $masterDataFile
 		
 		$user = getUser $folder
 		$header = @"
@@ -138,7 +142,7 @@ function setupRedgateStyle([string]$buildFolder,[bool]$includeUsers) {
 	
 	<!-- START OF FILE LIST -->
 "@
-		New-Item -Path $masterDataFile -Value $header
+		New-Item -Path $masterDataFile -Value $header -Force | out-null
 	}
 	
 }
