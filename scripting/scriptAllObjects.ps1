@@ -63,7 +63,7 @@ $so.Indexes = $true;
 $so.ClusteredIndexes = $true;
 $so.DriAllKeys = $true;
 $so.ExtendedProperties = $true;
-$so.IncludeIfNotExists = $true;
+$so.IncludeIfNotExists = $false;
 $so.NoCollation = $true;
 $so.Permissions = $false;
 $so.ScriptDataCompression = $true;
@@ -73,6 +73,7 @@ $so.AllowSystemObjects = $false;
 $so.AnsiFile = $false;
 $so.AnsiPadding = $false;
 $so.ScriptBatchTerminator = $true;
+$so.Encoding = [System.Text.Encoding]::UTF8
 
 
 $db = $srv.Databases[$database]
