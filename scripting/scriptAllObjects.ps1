@@ -73,7 +73,7 @@ $so.AllowSystemObjects = $false;
 $so.AnsiFile = $false;
 $so.AnsiPadding = $false;
 $so.ScriptBatchTerminator = $true;
-$so.Encoding = [System.Text.Encoding]::UTF8
+$so.Encoding = [System.Text.Encoding]::UTF8  
 
 
 $db = $srv.Databases[$database]
@@ -102,7 +102,7 @@ foreach ($Type in $IncludeTypes)
 		{
 			$ObjName = "$objs".replace("[", "").replace("]", "")
 			$OutFile = "$objpath\$ObjName.sql"
-			$objs.Script($so) + "GO" | out-File $OutFile #-Append
+			$objs.Script($so) | Out-File $OutFile -Encoding UTF8
 		}
 	}
 }
