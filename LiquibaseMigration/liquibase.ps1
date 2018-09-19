@@ -1,3 +1,4 @@
+param([string]$SrcFolder)
 
 $ListFolderBase = ("Deploy", "Assemblies", "Data", "Database Triggers", "Defaults", "Extended Properties", "Functions", "Rules", "Search property Lists", "Security", "Security\Asymmetric Keys", "Security\Certificates", "Security\Roles", "Security\Schemas", "Security\Symmetric Keys", "Sequences", "Service Broker\Contracts", "Service Broker\Event Notifications", "Service Broker\Message Types", "Service Broker\Queues", "Service Broker\Remote Service Bindings", "Service Broker\Routes", "Service Broker\Services", "Storage", "Storage\Full Text Catalogs", "Storage\Full Text Stoplists", "Storage\Partition Functions", "Storage\Partition Schemes", "Storage\File Groups", "Stored Procedures", "Synonyms", "Tables", "Table triggers", "View triggers", "Types", "Types\User-defined Data Types", "Types\XML Schema Collections", "Views", "ConstraintFunctions")
 
@@ -116,58 +117,60 @@ function getUser([string]$folder) {
 		$user = "view"
 	}
 	else {
-		$user = $env.UserName
+		$user = $env:UserName
 	}
 	
 	return $user
 }
 
-function createChangesets([string]$result,[bool]$addChangeSetForEachDDL) {
-	if ($addChangeSetForEachDDL) {
-		# Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP
-		# pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
-		$regex = New-Object System.Text.RegularExpressions.Regex (`
-			"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)", `
-			[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
-			-Or [System.Text.RegularExpressions.RegexOptions]::Singleline)
-		$result = $regex.Replace($result, "`n--changeSet $user:Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n;$1`n$6");
-		
-		# Set ANSI_PADDING ON for creation of xml indexes
-		$regex = New-Object System.Text.RegularExpressions.Regex (
-			"^(\s*)(CREATE\s*PRIMARY\s*XML\s*INDEX)", `
-			[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace)
-		$result = $regex.Replace($result, "`nSET ANSI_PADDING ON;`n$2");
-		
-		## Replace the {cc} created above with an iterator
-		$count = 1;
-		$regex = New-Object System.Text.RegularExpressions.Regex (
-			"{cc}", `
-			[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace)
-		$result = $regex.Replace($result, { Convert.ToString(count++) });
-		
-		return $result
-	}
+function createChangesets([string]$result,[string]$user) {
+	
+	# Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP
+	# pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)", `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+		-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+	
+	$result = $regex.Replace($result, 
+		"`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n`$1`$6");
+	
+	# Set ANSI_PADDING ON for creation of xml indexes
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		"^(\s*)(CREATE\s*PRIMARY\s*XML\s*INDEX)", `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+	$result = $regex.Replace($result, "`nSET ANSI_PADDING ON;`n`$2");
+	
+	# # ## Replace the {cc} created above with an iterator
+	$count = 1;
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		"{cc}", `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+	$result = $regex.Replace($result, { ($count++).ToString() });
+	
+	return $result
+
 }
 
 function replaceGoStatements([string]$result) {
 	## Replace GO statements with leading and trailing blanks (except GOTO statements)
-	$regex = New-Object System.Text.RegularExpressions.Regex ("^\s*GO(?!TO)\s*$", `
-		[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-		-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-		-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace)
+	$regex = New-Object System.Text.RegularExpressions.Regex ("^\s*GO(?!TO)\s*`$", `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 	$result = $regex.Replace($result, "GO");
 	
 	## Replace GOTO statements that have no leading spaces. Liquibase interprets these as GO statements. doh!
 	$regex = New-Object System.Text.RegularExpressions.Regex ("^GOTO", `
-		[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-		-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-		-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace)
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 	$result = $regex.Replace($result, "   GO");
 	
 	return $result
@@ -175,34 +178,51 @@ function replaceGoStatements([string]$result) {
 
 function removeMisc([string]$result,[bool]$includeUsers) {
 	## Remove all permissions
-	$regex = New-Object System.Text.RegularExpressions.Regex (
-			"^\s*GRANT\s*(EXECUTE|SELECT|INSERT|UPDATE|DELETE)\s*ON.*?TO.*?\r?$", `
-			[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace)
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+			"^\s*GRANT\s*(EXECUTE|SELECT|INSERT|UPDATE|DELETE)\s*ON.*?TO.*?\r?`$", `
+			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 	$result = $regex.Replace($result, "");
 	
 	## Remove all role memberships if users are not included
 	if (-not $includeUsers) {
-		$regex = New-Object System.Text.RegularExpressions.Regex (
-				"^\s*EXEC(UTE)?\s*sp_addrolemember\s*N?'.*?'\s*,\s*N?'.*?'\s*\n\s*GO$", `
-				[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-				-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
-				-Or [System.Text.RegularExpressions.RegexOptions]::Singleline)
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"^\s*EXEC(UTE)?\s*sp_addrolemember\s*N?'.*?'\s*,\s*N?'.*?'\s*\n\s*GO`$", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
 		$result = $regex.Replace($result, "");					
 	}
 	
 	## Remove all USE statements
-	$regex = New-Object System.Text.RegularExpressions.Regex (
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
 			"^USE\s+\[?(.*?)\]?\s*GO", `
-			[System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-Or [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
-			-Or [System.Text.RegularExpressions.RegexOptions]::Singleline)
+			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+			-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
 	$result = $regex.Replace($result, "")
 	
 	return $result
+}
+
+function replaceStartEnd([string]$result) {
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+			"GO\s*`$", `
+			([System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+			-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+	if (-not $regex.IsMatch($result)) {
+		$result = "--liquibase formatted sql`n$result`nGO`n"
+	}
+	else {
+		$result = "--liquibase formatted sql`n$result`n"
+	}
+	
+	return $result
+	
 }
 
 function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includeUsers) {
@@ -214,8 +234,6 @@ function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includ
 		$runonchange = $ListRunOnChange.Contains($folder).ToString().ToLower();
 		$addChangeSetForEachDDL = (-not $ListDontAddChangeSetForEachDDL.Contains($folder))
 		write-host "`n`nFOLDER :: $folder, RunOnChange :: $runonchange, AddChangeSetForEachDDL :: $addChangeSetForEachDDL"
-				
-		write-host "MASTER :: $masterDataFile"
 		
 		$user = getUser $folder
 		$header = @"
@@ -228,6 +246,7 @@ function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includ
     http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
 	
 	<!-- START OF FILE LIST -->
+	
 "@
 		New-Item -Path $masterDataFile -Value $header -Force | out-null
 		
@@ -236,27 +255,75 @@ function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includ
 		if (Test-Path $sourceFolderItem) {
 			foreach ($f in Get-ChildItem -Path $sourceFolderItem -Filter "*.sql") {
 				$targetFile = "$buildFolder\$folder\" + $f.Name
-				$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-")
-				write-host $changeset
-				$source = Get-Content -Path $f.FullName -Encoding UTF8
+				$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")
+		
+				write-host "Processing file $f"
+				
+				$source = Get-Content -Path $f.FullName -Encoding UTF8 -Raw
 				$result = $source
 				
-				$result = replaceGoStatements $result
-				$result = createChangesets $result $addChangeSetForEachDDL
-				$result = removeMisc $result
-				
-				## if this is a type where we should not create separate changesets just dump the code with a changeset comment
-				if (-not $addChangeSetForEachDDL) {
-					$result = "`n--changeSet $user:Initial-$changeset-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n$result"
+				if ($result.length -gt 0) {					
+					$result = replaceGoStatements $result
+					$result = removeMisc $result
+
+					if ($addChangeSetForEachDDL) {				
+						$result = createChangesets $result $user
+					}
+					if (-not $addChangeSetForEachDDL) {
+						## if this is a type where we should not create separate changesets just dump the code with a changeset comment
+						$result = "`n--changeSet " + $user + ":Initial-$changeset-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n$result"
+					}
+					
+					$result = replaceStartEnd $result
+					
+					Set-Content -Path $targetFile -Value $result -Encoding UTF8
+					Add-Content -Path $masterDataFile -Value ('        <include file="' + $f.Name + '" relativeToChangelogFile="true" />') -Encoding UTF8
 				}
-				
-				Set-Content -Path $targetFile -Value $result -Encoding UTF8
 			}
 		}
+		
+		$footer = @"
+	<!-- END OF FILE LIST -->
+</databaseChangeLog>
+"@		
+		Add-Content -Path $masterDataFile -Value $footer -Encoding UTF8
 	}
 	
 }
 
+function handleInvalidObjectsType([string]$folder,[string]$pattern,[string]$replacement) {
+
+	foreach ($f in Get-ChildItem -Path $folder -Filter "*.sql") {	
+		write-host "Invalid objects on :: $f"
+		$result = Get-Content -Path $f.FullName -Encoding UTF8 -Raw
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				$pattern, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+		$result = $regex.Replace($result, $replacement);							
+		Set-Content -Path $f.FullName -Value $result -Encoding UTF8
+	}
+}
+
+function handleInvalidObjects([string]$buildFolder) {
+	## The purpose of this target is to replace invalid sql files that starts with ALTER FUNCTION / ALTER PROCEDURE
+	handleInvalidObjectsType "$buildFolder\Stored Procedure" "^\s*ALTER\s*PROC(EDURE)?" "CREATE PROCEDURE"
+	handleInvalidObjectsType "$buildFolder\Functions" "^\s*ALTER\s*FUNCTION" "CREATE FUNCTION"
+}
+
+function handleCheckConstraints([string]$server,[string]$database) {
+	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
+	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
+		-Query "SET NOCOUNT ON;SELECT definition FROM sys.check_constraints UNION ALL SELECT definition FROM sys.default_constraints" `
+		-OutputAs DataRows
+		
+	foreach ($r in $rows) {
+		write-host $r.definition
+	}
+}
+
 #buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
 #init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
-setupRedgateStyle "C:\git\extern\sql-scripts\scripting\build\DBApplication" "build\db\DBApplication" $false
+#setupRedgateStyle $SrcFolder "build\db\DBApplication" $false
+handleInvalidObjects "build\db\DBApplication"
