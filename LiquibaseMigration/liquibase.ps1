@@ -1,4 +1,13 @@
-param([string]$SrcFolder)
+param([string]$buildType,[string]$SrcFolder,[string]$Server,[string]$Database,[string]$ListPackages,[string]$SrcDatabaseSuffix,[string]$GroupId)
+
+#Simple mode
+## liquibase.ps1 -SrcFolder c:\src\databases\mydb -Server localhost -Database mydb -GroupId com.mycompany
+
+# could also be written as
+## liquibase.ps1 -BuildType "Package" -SrcFolder c:\src\databases -Server localhost -ListPackages "mydb|mydb:mydb" -GroupId com.mycompany
+
+#Package mode (several db's in several packages)
+## liquibase.ps1 -BuildType "Package" -SrcFolder c:\src\databases -Server localhost -ListPackages "MyPackage1|MyDbA:ModuleA,MyDbB:ModuleB;MyPackage2|MyDbC:ModuleC" -GroupId com.mycompany
 
 $ListFolderBase = ("Deploy", "Assemblies", "Data", "Database Triggers", "Defaults", "Extended Properties", "Functions", "Rules", "Search property Lists", "Security", "Security\Asymmetric Keys", "Security\Certificates", "Security\Roles", "Security\Schemas", "Security\Symmetric Keys", "Sequences", "Service Broker\Contracts", "Service Broker\Event Notifications", "Service Broker\Message Types", "Service Broker\Queues", "Service Broker\Remote Service Bindings", "Service Broker\Routes", "Service Broker\Services", "Storage", "Storage\Full Text Catalogs", "Storage\Full Text Stoplists", "Storage\Partition Functions", "Storage\Partition Schemes", "Storage\File Groups", "Stored Procedures", "Synonyms", "Tables", "Table triggers", "View triggers", "Types", "Types\User-defined Data Types", "Types\XML Schema Collections", "Views", "ConstraintFunctions")
 
@@ -10,12 +19,25 @@ $ListDontAddChangeSetForEachDDL = ("Stored Procedures","Functions","Security\Use
 function build(
 	[string]$database,
 	[string]$sourcePath,
-	[string]$repoPath) {
+	[string]$buildFolderParent,
+	[string]$groupId,
+	[bool]$includeUsers) {
 	
 	write-host "---------------------------------------------------------"
 	write-host "Database name :: $database"
 	write-host "Source folder :: $sourcePath"
-	write-host "Repo path :: $repoPath"
+	write-host "Build path :: $buildFolderParent"
+	write-host "---------------------------------------------------------"
+	
+	$buildFolder = "$buildFolder\db\$database"
+	
+	init $buildFolderParent $buildFolder $groupId $database $database
+	setupRedgateStyle $sourcePath $buildFolder $includeUsers
+	handleInvalidObjects $buildFolder
+	
+	handleCheckConstraints $buildFolder $server $database
+	handleViewFunctions
+	handleObjectOrder $buildFolder $server $database
 }
 
 function getFolders([bool]$includeUsers) {
@@ -60,7 +82,7 @@ function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[
 
 function buildPackages(
 	[string] $listPackages,
-	[string] $repoBase,
+	[string] $buildFolderParent,
 	[string] $groupId,
 	[string] $sourceFolder,
 	[string] $sourceFolderSuffix) {
@@ -69,6 +91,7 @@ function buildPackages(
 		$arrA = $s.Split("|");
 		$modules = "";
 		
+		#package|db:module,db:module
 		if ($arrA.Length -eq 2) {
 			$packageName = $arrA[0];
 			$databases = $arrA[1];
@@ -77,7 +100,7 @@ function buildPackages(
 				$modules = "<module>$m<\db></module>`r`n   $modules";
 			}
 			
-			(Get-Content template_files\parentpom.xml).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId)  | Set-Content -Path "$repoBase\pom.xml" -Encoding UTF8
+			(Get-Content template_files\parentpom.xml).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
 			
 			write-host $modules;
 			
@@ -89,11 +112,10 @@ function buildPackages(
 					$database = $arrB[0];
 					$module = $arrB[1];
 					
-					$sourcePath = "$sourceFolder\$database\$suffix"
-					$repoPath = "$repoBase\$packageName\Application\$module\db"
-					
+					$sourcePath = "$sourceFolder\$database$suffix"
+					#$buildFolder = "$buildFolderParent\$packageName\Application\$module\db"
 
-					build $database $sourcePath $repoPath
+					build $database $sourcePath $buildFolderParent $groupId $false
 				}
 				else {
 					write-error "Syntax error in packages"
@@ -312,7 +334,7 @@ function handleInvalidObjects([string]$buildFolder) {
 	handleInvalidObjectsType "$buildFolder\Functions" "^\s*ALTER\s*FUNCTION" "CREATE FUNCTION"
 }
 
-function handleObjectMove([string]$sqlFile,[string}$sourceFolder,[string]$targetFolder,[string]$server,[string]$database) {
+function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$targetFolder,[string]$server,[string]$database) {
 	$sourceFile = "$sourceFolder\master.xml"
 	$targetFile = "$targetFolder\master.xml"
 	
@@ -380,7 +402,24 @@ function handleObjectOrder([string]$buildFolder,[string]$server,[string]$databas
 }
 
 
-#buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
+#buildPackages "DBApplication|DBApplication:DBApplication" "build" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
 #init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
 #setupRedgateStyle $SrcFolder "build\db\DBApplication" $false
-handleInvalidObjects "build\db\DBApplication"
+#handleInvalidObjects "build\db\DBApplication"
+
+if (-not $buildType) {
+	$buildType = "Simple"
+}
+
+if ($buildType -eq "Simple") {
+	build 
+}
+elseif ($buildType -eq "Package" {
+	buildPackages $ListPackages "build" $GroupId $SrcFolder $SrcDatabaseSuffix
+}
+
+	[string] $listPackages,
+	[string] $buildFolderParent,
+	[string] $groupId,
+	[string] $sourceFolder,
+	[string] $sourceFolderSuffix) {
