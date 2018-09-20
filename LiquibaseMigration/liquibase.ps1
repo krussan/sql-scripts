@@ -418,7 +418,6 @@ function handleObjectOrder([string]$buildFolder,[string]$server,[string]$databas
 if (-not $buildType) {
 	$buildType = "Simple"
 }
-
 if ($buildType -eq "Simple") {
 	buildPackages ("$database|$database" + ":" + "$database") "build" $GroupId $SrcFolder $SrcDatabaseSuffix
 }
