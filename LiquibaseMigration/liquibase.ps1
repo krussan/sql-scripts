@@ -308,20 +308,77 @@ function handleInvalidObjectsType([string]$folder,[string]$pattern,[string]$repl
 
 function handleInvalidObjects([string]$buildFolder) {
 	## The purpose of this target is to replace invalid sql files that starts with ALTER FUNCTION / ALTER PROCEDURE
-	handleInvalidObjectsType "$buildFolder\Stored Procedure" "^\s*ALTER\s*PROC(EDURE)?" "CREATE PROCEDURE"
+	handleInvalidObjectsType "$buildFolder\Stored Procedures" "^\s*ALTER\s*PROC(EDURE)?" "CREATE PROCEDURE"
 	handleInvalidObjectsType "$buildFolder\Functions" "^\s*ALTER\s*FUNCTION" "CREATE FUNCTION"
 }
 
-function handleCheckConstraints([string]$server,[string]$database) {
-	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
+function handleObjectMove([string]$sqlFile,[string}$sourceFolder,[string]$targetFolder,[string]$server,[string]$database) {
+	$sourceFile = "$sourceFolder\master.xml"
+	$targetFile = "$targetFolder\master.xml"
+	
+	$source = Get-Content -Path $sourceFile  -Encoding UTF8 -Raw
+	$target = Get-Content -Path $targetFile  -Encoding UTF8 -Raw
+
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
-		-Query "SELECT objectName = OBJECT_SCHEMA_NAME(parent_object_id) + '.' + OBJECT_NAME(parent_object_id) + '.sql' FROM sys.check_constraints" `
+		-InputFile "template_files\$sqlFile" `
 		-OutputAs DataRows
-		
+	
 	foreach ($r in $rows) {
-		write-host $r.objectName
+		$filename = $r.fullName
+		
+		Move-Item -Path "$sourceFolder\$filename.sql" -Destination $targetFolder
+
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"^\s*\<include\s*file=""$filename\.sql"".*?`$", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+		$source = $regex.Replace($source, "<!-- $filename Moved to constraint functions -->");		
+		
+		if (-not $target.Contains($filename)) {		
+			$regex = New-Object System.Text.RegularExpressions.Regex ( `
+					"^\s*\<\!--\sEND", `
+					([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+					-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+					-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+			$target = $regex.Replace($target, `
+				"	<include file=""$filename.sql"" relativeToChangelogFile=""true"" />`n	<!-- END");		
+				
+			Write-Host "REPLACE FIRST :: $filename"
+		}
 	}
+	
+	Set-Content -Path $sourceFile -Value $source -Encoding UTF8
+	Set-Content -Path $targetFile -Value $target -Encoding UTF8
 }
+
+function handleCheckConstraints([string]$buildFolder,[string]$server,[string]$database) {
+	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
+
+	handleObjectMove `
+		"GetCheckConstraint.sql" `
+		"$buildFolder\Functions" `
+		"$buildFolder\ConstraintFunctions" `
+		$server `
+		$database
+		
+}
+
+function handleViewFunctions([string]$buildFolder,[string]$server,[string]$database) {
+	## The purpose of this target is to move all functions referenced by views to ConstraintFunctions
+
+	handleObjectMove `
+		"GetReferencedFunctionsByView.sql" `
+		"$buildFolder\Views" `
+		"$buildFolder\ConstraintFunctions" `
+		$server `
+		$database
+}
+
+function handleObjectOrder([string]$buildFolder,[string]$server,[string]$database) {
+
+}
+
 
 #buildPackages "DBApplication|DBApplication:DBApplication" "repoBase" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
 #init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
