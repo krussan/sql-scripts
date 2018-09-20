@@ -105,7 +105,7 @@ function buildPackages(
 			$databases = $arrA[1];
 			
 			foreach ($m in $databases.Split(",")) {
-				$modules = "<module>$m<\db></module>`r`n   $modules";
+				$modules = "<module>$m\db</module>`r`n   $modules";
 			}
 			
 			(Get-Content template_files\parentpom.xml).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
