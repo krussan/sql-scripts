@@ -1,4 +1,12 @@
-param([string]$buildType,[string]$SrcFolder,[string]$Server,[string]$Database,[string]$ListPackages,[string]$SrcDatabaseSuffix,[string]$GroupId)
+param([string]$buildType,
+	[Parameter(Mandatory=$true)][string]$SrcFolder,
+	[Parameter(Mandatory=$true)][string]$Server,
+	[string]$Database,
+	[string]$ListPackages,
+	[string]$SrcDatabaseSuffix,
+	[Parameter(Mandatory=$true)][string]$GroupId,
+	[string]$DbUser,
+	[string]$DbPass)
 
 #Simple mode
 ## liquibase.ps1 -SrcFolder c:\src\databases\mydb -Server localhost -Database mydb -GroupId com.mycompany
@@ -412,14 +420,8 @@ if (-not $buildType) {
 }
 
 if ($buildType -eq "Simple") {
-	build 
+	buildPackages ("$database|$database" + ":" + "$database") "build" $GroupId $SrcFolder $SrcDatabaseSuffix
 }
-elseif ($buildType -eq "Package" {
+elseif ($buildType -eq "Package") {
 	buildPackages $ListPackages "build" $GroupId $SrcFolder $SrcDatabaseSuffix
 }
-
-	[string] $listPackages,
-	[string] $buildFolderParent,
-	[string] $groupId,
-	[string] $sourceFolder,
-	[string] $sourceFolderSuffix) {
