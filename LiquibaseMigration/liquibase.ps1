@@ -1,12 +1,12 @@
-param([string]$buildType,
-	[Parameter(Mandatory=$true)][string]$SrcFolder,
-	[Parameter(Mandatory=$true)][string]$Server,
-	[string]$Database,
-	[string]$ListPackages,
-	[string]$SrcDatabaseSuffix,
-	[Parameter(Mandatory=$true)][string]$GroupId,
-	[string]$DbUser,
-	[string]$DbPass)
+# param([string]$buildType,
+	# [Parameter(Mandatory=$true)][string]$SrcFolder,
+	# [Parameter(Mandatory=$true)][string]$Server,
+	# [string]$Database,
+	# [string]$ListPackages,
+	# [string]$SrcDatabaseSuffix,
+	# [Parameter(Mandatory=$true)][string]$GroupId,
+	# [string]$DbUser,
+	# [string]$DbPass)
 
 #Simple mode
 ## liquibase.ps1 -SrcFolder c:\src\databases\mydb -Server localhost -Database mydb -GroupId com.mycompany
@@ -415,12 +415,12 @@ function handleObjectOrder([string]$buildFolder,[string]$server,[string]$databas
 #setupRedgateStyle $SrcFolder "build\db\DBApplication" $false
 #handleInvalidObjects "build\db\DBApplication"
 
-if (-not $buildType) {
-	$buildType = "Simple"
-}
-if ($buildType -eq "Simple") {
-	buildPackages ("$database|$database" + ":" + "$database") "build" $GroupId $SrcFolder $SrcDatabaseSuffix
-}
-elseif ($buildType -eq "Package") {
-	buildPackages $ListPackages "build" $GroupId $SrcFolder $SrcDatabaseSuffix
-}
+# if (-not $buildType) {
+	# $buildType = "Simple"
+# }
+# if ($buildType -eq "Simple") {
+	# buildPackages ("$database|$database" + ":" + "$database") "build" $GroupId $SrcFolder $SrcDatabaseSuffix
+# }
+# elseif ($buildType -eq "Package") {
+	# buildPackages $ListPackages "build" $GroupId $SrcFolder $SrcDatabaseSuffix
+# }

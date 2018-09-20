@@ -1,7 +1,9 @@
 param(
 	[string]$server,
 	[string]$database,
-	[string]$outputpath
+	[string]$outputpath,
+	[string]$DbUser,
+	[string]$DbPass
 )
 
 $FolderMap = @{
@@ -43,7 +45,16 @@ $FolderMap = @{
 }
 
 [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | out-null
-$srv = New-Object ('Microsoft.SqlServer.Management.Smo.Server') $server
+
+$conn = new-object Microsoft.SqlServer.Management.Common.ServerConnection
+$conn.ServerInstance=$server
+if ($DbUser) {
+	$conn.LoginSecure = $false
+	$conn.Login = $DbUser
+	$conn.Password = $DbPass
+}
+
+$srv = New-Object ('Microsoft.SqlServer.Management.Smo.Server') $conn
  
 $IncludeTypes = @("Assemblies", "Triggers", "Defaults", "ExtendedProperties", "Rules", "Roles", "Tables", "Schemas", "StoredProcedures"
 	,"Sequences", "Views", "UserDefinedFunctions", "Synonyms", "UserDefinedDataTypes", "UserDefinedDataTypes", "UserDefinedTableTypes", "Triggers", "PartitionSchemes", "PartitionFunctions"
