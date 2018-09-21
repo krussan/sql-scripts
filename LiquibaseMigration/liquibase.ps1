@@ -409,7 +409,7 @@ function handleCheckConstraints([string]$buildFolder,[string]$server,[string]$da
 	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
 
 	handleObjectMove `
-		"GetCheckConstraint.sql" `
+		"GetCheckConstraints.sql" `
 		"$buildFolder\Functions" `
 		"$buildFolder\ConstraintFunctions" `
 		$server `
