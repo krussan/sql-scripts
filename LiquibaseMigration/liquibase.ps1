@@ -28,7 +28,7 @@ exit $lastexitcode
 	# [string]$DbUser,
 	# [string]$DbPass)
 
-Remove-Module SQLPS 
+#Remove-Module SQLPS 
 Import-Module -Name SqlServer 
 	
 #Simple mode
@@ -67,8 +67,9 @@ function build(
 	handleInvalidObjects $buildFolder
 	
 	handleCheckConstraints $buildFolder $server $database
-	handleViewFunctions
+	handleViewFunctions $buildFolder $server $database
 	handleObjectOrder $buildFolder $server $database
+
 }
 
 function getFolders([bool]$includeUsers) {
@@ -369,6 +370,8 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 	$sourceFile = "$sourceFolder\master.xml"
 	$targetFile = "$targetFolder\master.xml"
 	
+	Write-Host "HandleObjectMove :: $sourceFile -> $targetFile"
+	
 	$source = Get-Content -Path $sourceFile  -Encoding UTF8 -Raw
 	$target = Get-Content -Path $targetFile  -Encoding UTF8 -Raw
 
@@ -379,25 +382,27 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 	foreach ($r in $rows) {
 		$filename = $r.fullName
 		
-		Move-Item -Path "$sourceFolder\$filename.sql" -Destination $targetFolder
+		if (Test-Path $filename) {
+			Move-Item -Path "$sourceFolder\$filename.sql" -Destination $targetFolder
 
-		$regex = New-Object System.Text.RegularExpressions.Regex ( `
-				"^\s*\<include\s*file=""$filename\.sql"".*?`$", `
-				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-		$source = $regex.Replace($source, "<!-- $filename Moved to constraint functions -->");		
-		
-		if (-not $target.Contains($filename)) {		
 			$regex = New-Object System.Text.RegularExpressions.Regex ( `
-					"^\s*\<\!--\sEND", `
+					"^\s*\<include\s*file=""$filename\.sql"".*?`$", `
 					([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 					-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 					-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-			$target = $regex.Replace($target, `
-				"	<include file=""$filename.sql"" relativeToChangelogFile=""true"" />`n	<!-- END");		
-				
-			Write-Host "REPLACE FIRST :: $filename"
+			$source = $regex.Replace($source, "<!-- $filename Moved to constraint functions -->");		
+			
+			if (-not $target.Contains($filename)) {		
+				$regex = New-Object System.Text.RegularExpressions.Regex ( `
+						"^\s*\<\!--\sEND", `
+						([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+						-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+						-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+				$target = $regex.Replace($target, `
+					"	<include file=""$filename.sql"" relativeToChangelogFile=""true"" />`n	<!-- END");		
+					
+				Write-Host "REPLACE FIRST :: $filename"
+			}
 		}
 	}
 	
@@ -407,7 +412,8 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 
 function handleCheckConstraints([string]$buildFolder,[string]$server,[string]$database) {
 	## The purpose of this target is to move all functions that are part of a check constraint to execute before table creation
-
+	Write-Host "Handle Check Constraints :: $buildFolder"
+	
 	handleObjectMove `
 		"GetCheckConstraints.sql" `
 		"$buildFolder\Functions" `
@@ -428,8 +434,63 @@ function handleViewFunctions([string]$buildFolder,[string]$server,[string]$datab
 		$database
 }
 
-function handleObjectOrder([string]$buildFolder,[string]$server,[string]$database) {
+function changeObjectOrder([string]$type,[string]$sourceFolder,[string]$sqlFile,[string]$server,[string]$database) {
+	Write-Host "Running object order on :: $type"
+	
+	if (Test-Path $sqlFile) {
+		$masterFile = "$sourceFolder\master.xml"
+		
+		write-host "Modifying $masterfile for order of object creation ..."
+		$source = Get-Content -Path $masterFile  -Encoding UTF8 -Raw
+		
+		
+		$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
+			-InputFile $sqlFile `
+			-Variable "type=$type" `
+			-OutputAs DataRows
+			
+		$newOrder = "";
+		
+		# re-arrange order of include tags
+		foreach ($r in $rows) {
+			$tag = $r.tag
+			$objectName = $r.objectName
+			
+			$filePath = "$sourceFolder\$objectName.sql"
+			
+			write-host "Checking for file :: $filePath"
+			
+			if (Test-Path $filePath) {
+				$newOrder = "$newOrder`n$tag"
+			}
+		}
+		
+		#  check the new generated source and delete all files that are not present in the masterdata
+		# foreach ($f in Get-ChildItem -Path $sourceFolderItem -Filter "*.sql") {
+			# $filename = $f.FullName
+			# write-host "Checking master data for file :: $filename"
+			
+			# if (
+			
+		# }
+		
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"\<\!--\sSTART\sOF\sFILE\sLIST\s--\>(.*?)\<\!--\sEND\sOF\sFILE\sLIST\s--\>", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+		$source = $regex.Replace($source, "<!-- START OF FILE LIST -->`n$newOrder`n    <!-- END OF FILE LIST -->`n");
+		
+		Set-Content -Path $masterFile -Value $source -Encoding UTF8
+	}
+}
 
+function handleObjectOrder([string]$buildFolder,[string]$server,[string]$database) {
+	changeObjectOrder "TABLES" "$buildFolder\Tables" "template_files\ChangeOrderOfTableCreation2.sql" $server $database
+	changeObjectOrder "VIEW" "$buildFolder\Views" "template_files\ChangeorderOfFunctionAndViews2.sql" $server $database
+	changeObjectOrder "FUNCTION" "$buildFolder\Functions" "template_files\ChangeorderOfFunctionAndViews2.sql" $server $database
+	changeObjectOrder "ASSEMBLY" "$buildFolder\Assemblies" "template_files\ChangeOrderOfAssemblies.sql" $server $database
 }
 
 

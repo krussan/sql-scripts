@@ -29,7 +29,9 @@ SET NOCOUNT ON;
     , rn = ROW_NUMBER() OVER (PARTITION BY CTE.assembly_id ORDER BY CTE.level DESC)
    FROM CTE
 )
-SELECT '    <include file="' + name + '.sql" relativeToChangelogFile="true" />'
+SELECT objectName = name
+   , tag = '    <include file="' + name + '.sql" relativeToChangelogFile="true" />'
+
 FROM PART
 WHERE rn = 1
 ORDER BY level

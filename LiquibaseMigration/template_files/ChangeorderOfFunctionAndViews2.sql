@@ -49,7 +49,8 @@ DECLARE @type varchar(50) = '$(type)'
     , rn = ROW_NUMBER() OVER (PARTITION BY CTE.object_id ORDER BY level DESC)
    FROM CTE
 )
-SELECT '    <include file="'+ PART.schemaName + '.' + PART.objectName + '.sql" relativeToChangelogFile="true" />'
+SELECT objectName = PART.schemaName + '.' + PART.objectName
+	, tag = '    <include file="'+ PART.schemaName + '.' + PART.objectName + '.sql" relativeToChangelogFile="true" />'
 FROM PART
 WHERE rn = 1
 ORDER BY level

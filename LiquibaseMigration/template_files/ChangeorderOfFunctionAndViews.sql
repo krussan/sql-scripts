@@ -38,7 +38,9 @@ declare   @PARAM_OBJECT_NAME VARCHAR(500) = '';
          ON b.UsedByObjectId = a.DependentObjectId
 		 --and a.UsedByObjectName = b.DependentObjectName AND a.UseByObjectSchema = b.DependentObjectSchema
     )
-    SELECT '    <include file="'+UseByObjectSchema+'.'+UsedByObjectName+'.sql" relativeToChangelogFile="true" />', m.Level
-	 FROM CTE_DependentObjects2 m
+    SELECT 
+		objectName = tableSchema + '.' + tableName
+	  , tag = '    <include file="' + tableSchema + '.' + tableName + '.sql" relativeToChangelogFile="true" />'
+	FROM CTE_DependentObjects2 m
     ORDER BY m.Level   
 	OPTION (MAXRECURSION 0);

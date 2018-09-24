@@ -46,7 +46,8 @@ SELECT
 FROM CTE
 )
 SELECT
-   '    <include file="' + tableSchema + '.' + tableName + '.sql" relativeToChangelogFile="true" />'
+	 objectName = tableSchema + '.' + tableName
+   , tag = '    <include file="' + tableSchema + '.' + tableName + '.sql" relativeToChangelogFile="true" />'
 FROM PART 
 WHERE rn = 1
 ORDER BY level
