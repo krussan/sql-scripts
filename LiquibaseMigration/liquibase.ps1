@@ -69,6 +69,7 @@ function build(
 	handleCheckConstraints $buildFolder $server $database
 	handleViewFunctions $buildFolder $server $database
 	handleObjectOrder $buildFolder $server $database
+	extractAllTriggers $buildFolder
 
 }
 
@@ -491,6 +492,149 @@ function handleObjectOrder([string]$buildFolder,[string]$server,[string]$databas
 	changeObjectOrder "VIEW" "$buildFolder\Views" "template_files\ChangeorderOfFunctionAndViews2.sql" $server $database
 	changeObjectOrder "FUNCTION" "$buildFolder\Functions" "template_files\ChangeorderOfFunctionAndViews2.sql" $server $database
 	changeObjectOrder "ASSEMBLY" "$buildFolder\Assemblies" "template_files\ChangeOrderOfAssemblies.sql" $server $database
+}
+
+function extractTriggers([string]$triggerType,[string]$buildFolder) {
+	write-host "Extracting trigger of type :: $triggertype"
+	$targetFolder = "$buildFolder\$triggerType triggers"
+	$sourceFolder = "$buildFolder\$triggerType" + "s"
+	$masterDataFile = "$targetFolder\master.xml"
+	$user = $env:UserName
+	
+	$output = @"
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+	
+	<!-- START OF FILE LIST -->
+"@	
+	foreach ($f in Get-ChildItem -Path $sourceFolder -Filter "*.sql") {
+		$filename = $f.FullName
+		
+		$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")
+		
+		write-host "Extracting triggers from :: $filename"
+		$source = Get-Content -Path $filename -Encoding UTF8 -Raw
+		
+		# remove all liquibase changeset comments from the original file
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"^--changeset.*?`$", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+		$source = $regex.Replace($source, "");
+		
+		# match all triggers up until the next GO statement. be sure to include set options before the trigger
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				@"
+(?<total>((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s+(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s+TRIGGER)\s+\[?(?<schema>[a-z|A-Z|0-9|_]*)\]?\.\[?(?<object>[a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO))				
+"@, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+		foreach ($m in $regex.Matches($source)) {
+			# foreach match we have the full trigger in the total variabel, schema and object
+			# create the new trigger filename
+			$triggerBaseName = $f.BaseName + "-" + $m.Groups["schema"].Value + "." + $m.Groups["object"].Value
+			$triggerFilename = "$targetFolder\$triggerBaseName.sql"
+			$total = $m.Groups["total"].Value
+			
+			# write the trigger to file
+			$triggerContent = @"
+--liquibase formatted sql
+
+--changeSet $user:Initial-$triggerBaseName-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+$total
+					
+"@
+			Set-Content -Path $triggerFilename -Encoding UTF8 -Value $triggerContent
+			
+			# Add the file to the masterdata file in the trigger catalog
+			$output = $output + "        <include file=""$triggerBaseName.sql"" relativeToChangelogFile=""true"" />`n"
+		}
+		
+		# match all trigger order and move them to separate file
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"^(?<paramrow>\s*EXEC\s*sp_settriggerorder\s*(N)?'(?<paramfilename>[^']*)'.*?)`$", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+			
+		$triggerOrder = "";
+		foreach ($m in $regex.Matches($source)) {
+			$paramFilename = $m.Groups["paramfilename"].Value
+			$paramFilename = $paramfilename.Replace("[", "").Replace("]", "")
+			$paramRow = $m.Groups["paramRow"].Value
+			
+			$triggerOrder = $triggerOrder + "^n" + $paramRow
+		}
+		$triggerOrderFilename = $triggerBaseName + "-trigger-order.sql"		
+		
+		if ($triggerOrder.Length > 0) {
+			$content = @"
+--liquibase formatted sql
+
+--changeSet $user:Initial-$triggerBaseName-trigger-order-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+$triggerOrder
+"@
+			Set-Content -Path "$targetFolder\$triggerOrderFilename" -Value $content -Encoding UTF8
+			
+			# Add the order file to the masterdata file
+			$output = $output + "        <include file=""$triggerOrderFilename"" relativeToChangelogFile=""true"" />`n"
+		}
+		
+		# remove the triggers from the original file 
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				@"
+((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)				
+"@, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+		$source = $regex.Replace($source, "");
+		
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"^(\s*EXEC\s*sp_settriggerorder\s*(N)?'([^']*)'.*?)`$", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))		
+		$source = $regex.Replace($source, "");				
+		
+		# redo the changeset comments
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				@"
+((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)
+"@, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+		$source = $regex.Replace($source, "`n--changeSet $user:Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$1`n$6");
+		
+		# Replace the ${cc} created above with an iterator
+		$count = 1;
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+			"{cc}", `
+			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+		$source = $regex.Replace($source, { ($count++).ToString() });
+		
+		# rewrite the original file without the triggers
+		Set-Content -Path $filename -Value $source -Encoding UTF8
+		
+	}
+}
+
+function extractAllTriggers([string]$buildFolder) {
+	extractTriggers "Table" $buildFolder
+	extractTriggers "View" $buildFolder
 }
 
 
