@@ -70,7 +70,8 @@ function build(
 	handleViewFunctions $buildFolder $server $database
 	handleObjectOrder $buildFolder $server $database
 	extractAllTriggers $buildFolder
-
+	setupData $buildFolder $server $database
+	handleObjectCreation $buildFolder $server $database
 }
 
 function getFolders([bool]$includeUsers) {
@@ -637,11 +638,104 @@ function extractAllTriggers([string]$buildFolder) {
 	extractTriggers "View" $buildFolder
 }
 
-function setupData([string]$buildFolder) {
+function setupData([string]$buildFolder,[string]$server,[string]$database) {
+	$dataobjects = ""
 	# The purpose of this target is to sort the data files to execute in the correct order according to foreign keys
 	foreach ($f in Get-ChildItem -Path "$buildFolder\Data" -Filter "*Data.sql") {
 		$datafile = $f.Name
+		$schema = $datafile.Subtring(0,$datafile.IndexOf("."))
+		$table = $datafile.Substring($datafile.IndexOf(".") + 1, $datafile.Length - $datafile.IndexOf(".") - 10)
 		
+		write-host "Processing data file $datafile :: $schema :: $table"
+		$dataobjects = $dataobjects + "`nINSERT INTO #tables (schemaName, tableName) VALUES ('$schema', '$table');"
+		
+		(Get-Content template_files\ChangeOrderOfDataScripts.sql).replace("@OBJECTS@", $dataobjects) | Set-Content -Path "temp\datascript.sql" -Encoding UTF8
+		changeObjectOrder "DATA" "$buildFolder\Data" "temp\datascript.sql" $server $database
+	}
+}
+
+function fixDataScript([string]$buildFolder) {
+	# The purpose of this target is to insert a changeset comment in all data files
+	$user = $env:UserName
+	
+	foreach ($f in Get-ChildItem -Path "$buildFolder\Data" -Filter "*Data.sql") {
+		$filename = $f.FullName;
+		$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
+		
+		write-host "Processing file :: $filename"
+
+		$source = Get-Content -Path $filename -Encoding UTF8 -Raw		
+		$regex = New-Object System.Text.RegularExpressions.Regex ( `
+			"--liquibase\sformatted\ssql", `
+			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+		$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet $user:Initial-${changeset}-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false");		
+		
+		Set-Content -Path $filename -Value $source -Encoding UTF8		
+	}
+}
+
+function getCollation([string]$server,[string]$database) {
+	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
+		-Query "SELECT collation_name FROM sys.databases WHERE database_id = DB_ID()" `
+		-OutputAs DataRows
+
+	if ($rows.Count > 0) {	
+		return $rows[0]["collation_name"]
+	}
+	else {
+		return "";
+	}
+}
+
+function handleObjectCreation([string]$buildFolder,[string]$server,[string]$database) {
+	$collation = getCollation $server $database
+	Write-Host "Collation :: $collation"
+	
+	# The purpose of this target is to modify each object (function, procs) to create a dummy changeset first then use ALTER on the following changeset
+	# get type for each file
+	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
+		-InputFile "template_files\GetObjectType.sql"
+		-OutputAs DataRows
+		
+	foreach ($r in $rows) {
+		$folder = "$buildFolder\" + $r["folder"].Trim()
+		$user = $r["username"].Trim()
+		$filename = "$folder\" + $r["object"].Trim + ".sql"
+		
+		foreach ($f in Get-ChildItem -Path $sourceFolderItem -Filter $filename) {
+			$filename = $f.FullName
+			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
+			
+			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
+			
+		}
+		
+		if (Test-Path $filename) {
+			write-host "Processing :: $filename"
+			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
+			$pattern = $r["regex"].Trim()
+			$replacement = $r["replacement"].Trim()
+			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
+			$definition = $r["definition"];
+			
+			$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				$pattern, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+			$source = $regex.Replace($source, $replacement);		
+
+			$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"--liquibase\sformatted\ssql", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+			$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet $user:Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$definition`nGO`n`n");		
+			
+			Set-Content -Path $filename -Value $source -Encoding UTF8
+		}
 	}
 }
 
