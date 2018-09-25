@@ -637,6 +637,14 @@ function extractAllTriggers([string]$buildFolder) {
 	extractTriggers "View" $buildFolder
 }
 
+function setupData([string]$buildFolder) {
+	# The purpose of this target is to sort the data files to execute in the correct order according to foreign keys
+	foreach ($f in Get-ChildItem -Path "$buildFolder\Data" -Filter "*Data.sql") {
+		$datafile = $f.Name
+		
+	}
+}
+
 
 #buildPackages "DBApplication|DBApplication:DBApplication" "build" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
 #init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
