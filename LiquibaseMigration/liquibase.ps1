@@ -741,6 +741,7 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 }
 
 
+
 #buildPackages "DBApplication|DBApplication:DBApplication" "build" "com.nordax.db" "C:\git\extern\sql-scripts\scripting\DBApplication\DBApplication" 
 #init "build" "build\db\DBApplication" "com.nordax.db" "DBApplication" "DBApplication"
 #setupRedgateStyle $SrcFolder "build\db\DBApplication" $false
