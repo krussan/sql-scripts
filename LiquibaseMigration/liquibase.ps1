@@ -677,16 +677,12 @@ function fixDataScript([string]$buildFolder) {
 }
 
 function getCollation([string]$server,[string]$database) {
-	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
+	$data = Invoke-SqlCmd -ServerInstance $server -Database $database `
 		-Query "SELECT collation_name FROM sys.databases WHERE database_id = DB_ID()" `
-		-OutputAs DataRows
-
-	if ($rows.Count > 0) {	
-		return $rows[0]["collation_name"]
-	}
-	else {
-		return "";
-	}
+		-OutputAs DataRow
+	
+	return $data.collation_name
+	
 }
 
 function handleObjectCreation([string]$buildFolder,[string]$server,[string]$database) {
@@ -696,30 +692,34 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 	# The purpose of this target is to modify each object (function, procs) to create a dummy changeset first then use ALTER on the following changeset
 	# get type for each file
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
-		-InputFile "template_files\GetObjectType.sql"
+		-InputFile "template_files\GetObjectType.sql" `
+		-Variable "collation=$collation" `
 		-OutputAs DataRows
 		
 	foreach ($r in $rows) {
-		$folder = "$buildFolder\" + $r["folder"].Trim()
-		$user = $r["username"].Trim()
-		$filename = "$folder\" + $r["object"].Trim + ".sql"
-		
-		foreach ($f in Get-ChildItem -Path $sourceFolderItem -Filter $filename) {
-			$filename = $f.FullName
-			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
-			
-			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
-			
-		}
+		$folder = "$buildFolder\" + $r.folder.Trim()
+		$user = $r.username.Trim()
+		$filename = "$folder\" + $r.schemaName.Trim() + "." + $r.objectName.Trim() + ".sql"
+
+		write-host "Examining :: $filename"
 		
 		if (Test-Path $filename) {
-			write-host "Processing :: $filename"
-			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
-			$pattern = $r["regex"].Trim()
-			$replacement = $r["replacement"].Trim()
-			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
-			$definition = $r["definition"];
 			
+			
+			$f = Get-Item $filename
+			$filename = $f.FullName
+			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
+			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
+			
+			write-host "Processing :: $filename"
+			
+			$source = Get-Content -Path $filename -Encoding UTF8 -Raw
+			$pattern = $r.regex.Trim()
+			$replacement = $r.replacement.Trim()
+			$changeset = $f.BaseName.Replace(".", "-").Replace(" ", "-").Replace("_", "-")		
+			$definition = $r.creationScript;
+
+			# Replace CREATE with ALTER
 			$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				$pattern, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
@@ -728,10 +728,11 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 			$source = $regex.Replace($source, $replacement);		
 
 			$regex = New-Object System.Text.RegularExpressions.Regex ( `
-				"--liquibase\sformatted\ssql", `
+				"--liquibase\sformatted\ssql(.*?)\--changeSet.*?runOnChange:(true|false)", `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespacee `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
 			$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet $user:Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$definition`nGO`n`n");		
 			
 			Set-Content -Path $filename -Value $source -Encoding UTF8
@@ -754,3 +755,4 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 # elseif ($buildType -eq "Package") {
 	# buildPackages $ListPackages "build" $GroupId $SrcFolder $SrcDatabaseSuffix
 # }
+
