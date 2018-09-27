@@ -70,8 +70,8 @@ function build(
 	handleViewFunctions $buildFolder $server $database
 	handleObjectOrder $buildFolder $server $database
 	extractAllTriggers $buildFolder
-	setupData $buildFolder $server $database
-	handleObjectCreation $buildFolder $server $database
+	#setupData $buildFolder $server $database
+	#handleObjectCreation $buildFolder $server $database
 }
 
 function getFolders([bool]$includeUsers) {
@@ -85,7 +85,7 @@ function getFolders([bool]$includeUsers) {
 }
 
 function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[string]$packageName,[string]$databaseName,[bool]$includeUsers) {
-	$dirs = getFolders $includeUsers
+	$dirs = getFolders $true
 	
 	Remove-Item -Path $buildFolder -Force -Recurse | out-null
 	New-Item -ItemType Directory -Path $buildFolder | out-null
@@ -96,12 +96,13 @@ function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[
 	Copy-Item -Path "template_files\run_liquibase.bat" -Destination "$buildFolder"
 	Copy-Item -Path "template_files\assembly.xml" -Destination "$buildFolderParent"
 	
-	(Get-Content template_files\pom.xml).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId).replace("@DATABASENAME@", $databaseName)  | Set-Content -Path "$buildFolder\pom.xml" -Encoding UTF8
+	(Get-Content template_files\pom.xml -Encoding UTF8 -Raw).replace("@PACKAGE@", $packageName + "-parent").replace("@GROUPID@", $groupId).replace("@DATABASENAME@", $databaseName)  | Set-Content -Path "$buildFolder\pom.xml" -Encoding UTF8
 
 	Write-Host "Adding liquibase binaries...`n`n"	
 	Copy-Item -Path "template_files\liquibase-app\lib\sqljdbc41.jar" -Destination "$buildFolderParent"
 	
 	Write-Host "Creating directories and xml structures...`n`n"	
+
 	foreach ($d in $dirs) {
 		Write-Host "Creating directory :: $buildFolder\$d"
 		New-Item -ItemType Directory -Path "$buildFolder\$d" | out-null
@@ -111,6 +112,7 @@ function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[
 	Get-ChildItem $buildFolderParent -Recurse |
 		Where-Object {$_.GetType().ToString() -eq "System.IO.FileInfo"} |
 		Set-ItemProperty -Name IsReadOnly -Value $false
+
 }
 
 
@@ -131,13 +133,11 @@ function buildPackages(
 			$databases = $arrA[1];
 			
 			foreach ($m in $databases.Split(",")) {
-				$modules = "<module>$m\db</module>`r`n   $modules";
+				
 			}
 			
-			(Get-Content template_files\parentpom.xml).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName).replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
-			
-			write-host $modules;
-			
+		
+		
 			foreach ($db in $databases) {
 				write-host $db
 				$arrB = $db.Split(":");
@@ -145,6 +145,8 @@ function buildPackages(
 				if ($arrB.Length -eq 2) {
 					$database = $arrB[0];
 					$module = $arrB[1];
+					
+					$modules = "<module>db\$module</module>`r`n   $modules";
 					
 					$sourcePath = "$sourceFolder\$database$suffix"
 					#$buildFolder = "$buildFolderParent\$packageName\Application\$module\db"
@@ -155,6 +157,9 @@ function buildPackages(
 					write-error "Syntax error in packages"
 				}
 			}
+			
+			(Get-Content template_files\parentpom.xml -Encoding UTF8 -Raw).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName + "-parent").replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
+
 		}
 		else {
 			write-error "Syntax error in packages"
@@ -202,13 +207,7 @@ function createChangesets([string]$result,[string]$user) {
 	$result = $regex.Replace($result, "`nSET ANSI_PADDING ON;`n`$2");
 	
 	# # ## Replace the {cc} created above with an iterator
-	$count = 1;
-	$regex = New-Object System.Text.RegularExpressions.Regex ( `
-		"{cc}", `
-		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-	$result = $regex.Replace($result, { ($count++).ToString() });
+	$result = replaceIterator $result
 	
 	return $result
 
@@ -495,6 +494,23 @@ function handleObjectOrder([string]$buildFolder,[string]$server,[string]$databas
 	changeObjectOrder "ASSEMBLY" "$buildFolder\Assemblies" "template_files\ChangeOrderOfAssemblies.sql" $server $database
 }
 
+function replaceIterator([string]$source) {
+	$count = 0;
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		 "{cc}", `
+		 ([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		 -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		 -bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+	while($regex.IsMatch($source)) {
+		$count = $count + 1
+		$source = $regex.Replace($source, $count, 1)
+	}
+	
+	#$source = $regex.Replace($source, { $count++; return ($count).ToString() });
+		
+	return $source;
+}
+
 function extractTriggers([string]$triggerType,[string]$buildFolder) {
 	write-host "Extracting trigger of type :: $triggertype"
 	$targetFolder = "$buildFolder\$triggerType triggers"
@@ -592,7 +608,7 @@ $triggerOrder
 		# remove the triggers from the original file 
 		$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				@"
-((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)				
+((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
@@ -607,25 +623,24 @@ $triggerOrder
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))		
 		$source = $regex.Replace($source, "");				
 		
-		# redo the changeset comments
+		# # redo the changeset comments
 		$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				@"
-((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)
+((
+(SET\s*(ANSI_NULLS|ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*)
+(ON|OFF)\s*
+((GO)\s*)*
+)*)
+\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
 				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
-		$source = $regex.Replace($source, "`n--changeSet $user:Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$1`n$6");
+		$source = $regex.Replace($source, "`n`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`$1`n`$8");
 		
 		# Replace the ${cc} created above with an iterator
-		$count = 1;
-		$regex = New-Object System.Text.RegularExpressions.Regex ( `
-			"{cc}", `
-			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-		$source = $regex.Replace($source, { ($count++).ToString() });
+		$source = replaceIterator $source
 		
 		# rewrite the original file without the triggers
 		Set-Content -Path $filename -Value $source -Encoding UTF8
@@ -649,7 +664,7 @@ function setupData([string]$buildFolder,[string]$server,[string]$database) {
 		write-host "Processing data file $datafile :: $schema :: $table"
 		$dataobjects = $dataobjects + "`nINSERT INTO #tables (schemaName, tableName) VALUES ('$schema', '$table');"
 		
-		(Get-Content template_files\ChangeOrderOfDataScripts.sql).replace("@OBJECTS@", $dataobjects) | Set-Content -Path "temp\datascript.sql" -Encoding UTF8
+		(Get-Content template_files\ChangeOrderOfDataScripts.sql -Encoding UTF8 -Raw).replace("@OBJECTS@", $dataobjects) | Set-Content -Path "temp\datascript.sql" -Encoding UTF8
 		changeObjectOrder "DATA" "$buildFolder\Data" "temp\datascript.sql" $server $database
 	}
 }
@@ -670,7 +685,7 @@ function fixDataScript([string]$buildFolder) {
 			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-		$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet $user:Initial-${changeset}-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false");		
+		$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet " + $user + ":Initial-${changeset}-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false");		
 		
 		Set-Content -Path $filename -Value $source -Encoding UTF8		
 	}
@@ -733,7 +748,7 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespacee `
 				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
-			$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet $user:Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$definition`nGO`n`n");		
+			$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet " + $user + ":Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$definition`nGO`n`n");		
 			
 			Set-Content -Path $filename -Value $source -Encoding UTF8
 		}
