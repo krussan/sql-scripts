@@ -66,10 +66,10 @@ function build(
 	setupRedgateStyle $sourcePath $buildFolder $includeUsers
 	handleInvalidObjects $buildFolder
 	
-	handleCheckConstraints $buildFolder $server $database
-	handleViewFunctions $buildFolder $server $database
-	handleObjectOrder $buildFolder $server $database
-	extractAllTriggers $buildFolder
+	#handleCheckConstraints $buildFolder $server $database
+	#handleViewFunctions $buildFolder $server $database
+	#handleObjectOrder $buildFolder $server $database
+	#extractAllTriggers $buildFolder
 	#setupData $buildFolder $server $database
 	#handleObjectCreation $buildFolder $server $database
 }
@@ -206,7 +206,15 @@ function createChangesets([string]$result,[string]$user) {
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 	$result = $regex.Replace($result, "`nSET ANSI_PADDING ON;`n`$2");
 	
-	# # ## Replace the {cc} created above with an iterator
+	# Parse away object creation comments
+	# $regex = New-Object System.Text.RegularExpressions.Regex ( `
+		# "^\s*\/\*{6}\s*Object.*?\*{6}\/\s*`$", `
+		# ([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		# -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		# -bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+	# $result = $regex.Replace($result, "");
+
+	# Replace the {cc} created above with an iterator
 	$result = replaceIterator $result
 	
 	return $result
@@ -381,13 +389,17 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 		-OutputAs DataRows
 	
 	foreach ($r in $rows) {
-		$filename = $r.fullName
+		$f = Get-Item ($sourceFolder + "\" + $r.fullName + ".sql")
 		
-		if (Test-Path $filename) {
-			Move-Item -Path "$sourceFolder\$filename.sql" -Destination $targetFolder
+		Write-host "Object Move :: $filename"
+		
+		if (Test-Path $f.FullName) {
+			$filename = $f.Name
+			Write-host "... Moving ..."
+			Move-Item -Path $f.FullName -Destination $targetFolder
 
 			$regex = New-Object System.Text.RegularExpressions.Regex ( `
-					"^\s*\<include\s*file=""$filename\.sql"".*?`$", `
+					"^\s*\<include\s*file=""$filename"".*?`$", `
 					([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 					-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 					-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
@@ -400,7 +412,7 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 						-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 						-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 				$target = $regex.Replace($target, `
-					"	<include file=""$filename.sql"" relativeToChangelogFile=""true"" />`n	<!-- END");		
+					"	<include file=""$filename"" relativeToChangelogFile=""true"" />`n	<!-- END");		
 					
 				Write-Host "REPLACE FIRST :: $filename"
 			}
@@ -429,7 +441,7 @@ function handleViewFunctions([string]$buildFolder,[string]$server,[string]$datab
 
 	handleObjectMove `
 		"GetReferencedFunctionsByView.sql" `
-		"$buildFolder\Views" `
+		"$buildFolder\Functions" `
 		"$buildFolder\ConstraintFunctions" `
 		$server `
 		$database
@@ -631,13 +643,13 @@ $triggerOrder
 (ON|OFF)\s*
 ((GO)\s*)*
 )*)
-\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)
+\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)(?!_EXISTING)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
 				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
-		$source = $regex.Replace($source, "`n`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`$1`n`$8");
+		$source = $regex.Replace($source, "`n`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n`$8");
 		
 		# Replace the ${cc} created above with an iterator
 		$source = replaceIterator $source
