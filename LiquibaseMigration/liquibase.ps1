@@ -66,11 +66,11 @@ function build(
 	setupRedgateStyle $sourcePath $buildFolder $includeUsers
 	handleInvalidObjects $buildFolder
 	
-	#handleCheckConstraints $buildFolder $server $database
-	#handleViewFunctions $buildFolder $server $database
-	#handleObjectOrder $buildFolder $server $database
-	#extractAllTriggers $buildFolder
-	#setupData $buildFolder $server $database
+	handleCheckConstraints $buildFolder $server $database
+	handleViewFunctions $buildFolder $server $database
+	handleObjectOrder $buildFolder $server $database
+	extractAllTriggers $buildFolder
+	setupData $buildFolder $server $database
 	handleObjectCreation $buildFolder $server $database
 }
 
@@ -184,12 +184,12 @@ function getUser([string]$folder) {
 	return $user
 }
 
-function createChangesets([string]$result,[string]$user) {
+function createChangesets([string]$result,[string]$user,[string]$runonchange) {
 	
 	# Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP
 	# pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
 	$regex = New-Object System.Text.RegularExpressions.Regex ( `
-		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)", `
+		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP)", `
 		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
@@ -358,7 +358,7 @@ function setupRedgateStyle([string]$srcfolder,[string]$buildFolder,[bool]$includ
 					$result = removeMisc $result
 					
 					if ($addChangeSetForEachDDL) {				
-						$result = createChangesets $result $user
+						$result = createChangesets $result $user $runonchange
 					}
 					if (-not $addChangeSetForEachDDL) {
 						## if this is a type where we should not create separate changesets just dump the code with a changeset comment
@@ -553,7 +553,7 @@ function replaceIterator([string]$source) {
 	return $source;
 }
 
-function extractTriggers([string]$triggerType,[string]$buildFolder) {
+function extractTriggers([string]$triggerType,[string]$buildFolder,[string]$runonchange) {
 	write-host "Extracting trigger of type :: $triggertype"
 	$targetFolder = "$buildFolder\$triggerType triggers"
 	$sourceFolder = "$buildFolder\$triggerType" + "s"
@@ -607,7 +607,7 @@ function extractTriggers([string]$triggerType,[string]$buildFolder) {
 			$triggerContent = @"
 --liquibase formatted sql
 
---changeSet $user:Initial-$triggerBaseName-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+--changeSet $user:Initial-$triggerBaseName-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange
 $total
 					
 "@
@@ -638,7 +638,7 @@ $total
 			$content = @"
 --liquibase formatted sql
 
---changeSet $user:Initial-$triggerBaseName-trigger-order-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+--changeSet $user:Initial-$triggerBaseName-trigger-order-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange
 $triggerOrder
 "@
 			Set-Content -Path "$targetFolder\$triggerOrderFilename" -Value $content -Encoding UTF8
@@ -673,13 +673,13 @@ $triggerOrder
 (ON|OFF)\s*
 ((GO)\s*)*
 )*)
-\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)(?!_EXISTING)
+\s*(CREATE|ALTER|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP)(?!_EXISTING)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
 				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
-		$source = $regex.Replace($source, "`n`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n`$8");
+		$source = $regex.Replace($source, "`n`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n`$8");
 		
 		# Replace the ${cc} created above with an iterator
 		$source = replaceIterator $source
@@ -691,8 +691,8 @@ $triggerOrder
 }
 
 function extractAllTriggers([string]$buildFolder) {
-	extractTriggers "Table" $buildFolder
-	extractTriggers "View" $buildFolder
+	extractTriggers "Table" $buildFolder "false"
+	extractTriggers "View" $buildFolder "true"
 }
 
 function setupData([string]$buildFolder,[string]$server,[string]$database) {
@@ -777,20 +777,20 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 			$definition = $r.creationScript;
 
 			# Replace CREATE with ALTER
-			# $regex = New-Object System.Text.RegularExpressions.Regex ( `
-				# $pattern, `
-				# ([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-				# -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				# -bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-			# $source = $regex.Replace($source, $replacement);		
+			$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				$pattern, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+			$source = $regex.Replace($source, $replacement);		
 
-			# $regex = New-Object System.Text.RegularExpressions.Regex ( `
-				# "--liquibase\sformatted\ssql(.*?)\--changeSet.*?runOnChange:(true|false)", `
-				# ([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-				# -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				# -bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespacee `
-				# -bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
-			# $source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet " + $user + ":Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false`n$definition`nGO`n`n");		
+			$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				"--liquibase\sformatted\ssql(.*?)\--changeSet.*?runOnChange:(true|false)", `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespacee `
+				-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+			$source = $regex.Replace($source, "--liquibase formatted sql`n`n--changeSet " + $user + ":Initial-$changeset-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:true`n$definition`nGO`n`n");		
 			
 			Set-Content -Path $filename -Value $source -Encoding UTF8
 		}
