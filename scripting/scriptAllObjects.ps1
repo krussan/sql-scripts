@@ -102,6 +102,8 @@ foreach ($Type in $IncludeTypes)
 		{
 			$ObjName = "$objs".replace("[", "").replace("]", "")
 			$OutFile = "$objpath\$ObjName.sql"
+			write-host "Processing :: $OutFile"
+			
 			$objs.Script($so) | Out-File $OutFile -Encoding UTF8
 		}
 	}
