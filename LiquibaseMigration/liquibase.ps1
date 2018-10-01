@@ -64,7 +64,7 @@ function build(
 	
 	init $buildFolderParent $buildFolder $groupId $database $database
 	setupRedgateStyle $sourcePath $buildFolder $includeUsers
-	handleInvalidObjects $buildFolder
+	#handleInvalidObjects $buildFolder
 	
 	#handleCheckConstraints $buildFolder $server $database
 	#handleViewFunctions $buildFolder $server $database
@@ -198,6 +198,28 @@ function createChangesets([string]$result,[string]$user) {
 	$result = $regex.Replace($result, 
 		"`n--changeSet " + $user + ":Initial-$changeset-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:$runonchange`n`$1`$6");
 	
+	# Parse away junk between changesets and creation
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		@"
+^(--changeSet.*?)$\s*
+(.*?)
+(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)
+"@, `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+		-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+	$result = $regex.Replace($result, "`$1`n`$3");
+	
+	$regex = New-Object System.Text.RegularExpressions.Regex ( `
+		"(--liquibase\sformatted\ssql)(.*?)(--changeSet)", `
+		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
+		-bor [System.Text.RegularExpressions.RegexOptions]::Singleline))
+	$result = $regex.Replace($result, "`$1`n`n`$3");
+		
+	
 	# Set ANSI_PADDING ON for creation of xml indexes
 	$regex = New-Object System.Text.RegularExpressions.Regex ( `
 		"^(\s*)(CREATE\s*PRIMARY\s*XML\s*INDEX)", `
@@ -206,13 +228,7 @@ function createChangesets([string]$result,[string]$user) {
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
 	$result = $regex.Replace($result, "`nSET ANSI_PADDING ON;`n`$2");
 	
-	# Parse away object creation comments
-	# $regex = New-Object System.Text.RegularExpressions.Regex ( `
-		# "^\s*\/\*{6}\s*Object.*?\*{6}\/\s*`$", `
-		# ([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-		# -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-		# -bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-	# $result = $regex.Replace($result, "");
+
 
 	# Replace the {cc} created above with an iterator
 	$result = replaceIterator $result
