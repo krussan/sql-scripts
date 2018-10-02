@@ -12,6 +12,7 @@ if ($env:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
 exit $lastexitcode
 }
 
+$QUERY_TIMEOUT = 600
 
 #############################################################################
 #End
@@ -415,7 +416,7 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
 		-InputFile "template_files\$sqlFile" `
-		-OutputAs DataRows -QueryTimeout 600
+		-OutputAs DataRows -QueryTimeout $QUERY_TIMEOUT
 	
 	foreach ($r in $rows) {
 		$f = Get-Item ($sourceFolder + "\" + $r.fullName + ".sql")
@@ -489,7 +490,7 @@ function changeObjectOrder([string]$type,[string]$sourceFolder,[string]$sqlFile,
 		$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
 			-InputFile $sqlFile `
 			-Variable "type=$type" `
-			-OutputAs DataRows -QueryTimeout 600
+			-OutputAs DataRows -QueryTimeout $QUERY_TIMEOUT
 			
 		$newOrder = "";
 		
@@ -750,7 +751,7 @@ function handleObjectCreation([string]$buildFolder,[string]$server,[string]$data
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
 		-InputFile "template_files\GetObjectType.sql" `
 		-Variable "collation=$collation" `
-		-OutputAs DataRows
+		-OutputAs DataRows -QueryTimeout $QUERY_TIMEOUT
 		
 	foreach ($r in $rows) {
 		$folder = "$buildFolder\" + $r.folder.Trim()
