@@ -3,7 +3,7 @@
 #need to force powershell to run in 64-bit mode .
 #############################################################################
 if ($env:PROCESSOR_ARCHITEW6432 -eq "AMD64") {
-    write-warning "Y'arg Matey, we're off to 64-bit land....."
+    write-warning "Y'arg Matey, we're off to never never land..... (64-bit)"
     if ($myInvocation.Line) {
         &"$env:WINDIR\sysnative\windowspowershell\v1.0\powershell.exe" -NonInteractive -NoProfile $myInvocation.Line
     }else{
@@ -409,14 +409,13 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 	$sourceFile = "$sourceFolder\master.xml"
 	$targetFile = "$targetFolder\master.xml"
 	
-	Write-Host "HandleObjectMove :: $sourceFile -> $targetFile"
-	
+	Write-Host "HandleObjectMove :: $sourceFile -> $targetFile ($sqlFile)"
 	$source = Get-Content -Path $sourceFile  -Encoding UTF8 -Raw
 	$target = Get-Content -Path $targetFile  -Encoding UTF8 -Raw
 
 	$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
 		-InputFile "template_files\$sqlFile" `
-		-OutputAs DataRows
+		-OutputAs DataRows -QueryTimeout 600
 	
 	foreach ($r in $rows) {
 		$f = Get-Item ($sourceFolder + "\" + $r.fullName + ".sql")
@@ -490,7 +489,7 @@ function changeObjectOrder([string]$type,[string]$sourceFolder,[string]$sqlFile,
 		$rows = Invoke-SqlCmd -ServerInstance $server -Database $database `
 			-InputFile $sqlFile `
 			-Variable "type=$type" `
-			-OutputAs DataRows
+			-OutputAs DataRows -QueryTimeout 600
 			
 		$newOrder = "";
 		

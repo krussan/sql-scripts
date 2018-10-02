@@ -1,7 +1,8 @@
 param(
 	[string]$server,
 	[string]$database,
-	[string]$outputpath
+	[string]$outputpath,
+	[string[]]$excludeRegex
 )
 
 $FolderMap = @{
@@ -101,10 +102,31 @@ foreach ($Type in $IncludeTypes)
 		If ($ExcludeSchemas -notcontains $objs.Schema)
 		{
 			$ObjName = "$objs".replace("[", "").replace("]", "")
-			$OutFile = "$objpath\$ObjName.sql"
-			write-host "Processing :: $OutFile"
 			
-			$objs.Script($so) | Out-File $OutFile -Encoding UTF8
+			$ismatch = $false;
+			foreach ($pattern in $excludeRegex) {
+				$regex = New-Object System.Text.RegularExpressions.Regex ( `
+				$pattern, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+				
+				if ($regex.IsMatch($ObjName)) {
+					$ismatch = $true
+					break;
+				}
+			
+			}
+			
+			if (-not $ismatch) {
+				$OutFile = "$objpath\$ObjName.sql"
+				write-host "Processing :: $OutFile"
+			
+				$objs.Script($so) | Out-File $OutFile -Encoding UTF8
+			}
+			else {
+				write-host "Skipping :: $ObjName"
+			}
 		}
 	}
 }
