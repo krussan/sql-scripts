@@ -79,26 +79,33 @@ $so.Encoding = [System.Text.Encoding]::UTF8
 
 $db = $srv.Databases[$database]
 
-$dbname = "$db".replace("[", "").replace("]", "")
+$dbname = "$database".replace("[", "").replace("]", "")
 $dbpath = "$outputpath" + "\" + "$dbname"
+
+write-host "Checking path :: $dbpath";
+
 if (!(Test-Path $dbpath)) { 
 	new-item -type directory -name "$dbname" -path "$outputpath" | out-null
 }
 
 foreach ($Type in $IncludeTypes)
 {
+	write-host "Processing type :: $Type"
 	$typeFolder = $FolderMap[$Type];
 	if (!$typeFolder) {
 		$typeFolder = $Type
 	}
 	
 	$objpath = "$dbpath\$typeFolder"
+	
 	if (!(Test-Path $objpath)) { 
 		new-item -type directory -name "$typeFolder" -path "$dbpath" | out-null
 	}
 	
+	write-host $database + " " + $db
 	foreach ($objs in $db.$Type)
 	{
+		Write-host "Checking object :: $objs"
 		If ($ExcludeSchemas -notcontains $objs.Schema)
 		{
 			$ObjName = "$objs".replace("[", "").replace("]", "")

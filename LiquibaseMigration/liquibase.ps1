@@ -160,7 +160,11 @@ function buildPackages(
 			}
 			
 			(Get-Content template_files\parentpom.xml -Encoding UTF8 -Raw).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName + "-parent").replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
-
+			
+			New-Item -ItemType Directory -Path "$buildFolderParent\scripts" -Force | out-null
+			Copy-Item -Path "template_files\StartDeploy.sql" -Destination "$buildFolderParent\scripts"
+			Copy-Item -Path "template_files\CompleteDeploy.sql" -Destination "$buildFolderParent\scripts"
+			
 		}
 		else {
 			write-error "Syntax error in packages"

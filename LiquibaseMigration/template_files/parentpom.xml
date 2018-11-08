@@ -14,7 +14,16 @@
     <database.baseurl>jdbc:sqlserver://${database.server};databaseName=${database.name};</database.baseurl>
     <liquibase.logLevel>info</liquibase.logLevel>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+	<timestamp>${maven.build.timestamp}</timestamp>
+	<maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>		
   </properties>
+  <pluginRepositories>
+      <pluginRepository>
+        <id>krussan</id>
+        <name>krussans maven repo</name>
+        <url>https://raw.githubusercontent.com/krussan/maven-repo/master/</url>
+      </pluginRepository>
+  </pluginRepositories>					  
 
   <build>
     <pluginManagement>
@@ -41,105 +50,40 @@
           </dependencies>
           <executions>
             <execution>
-              <id>StartDeploy</id>
-              <phase>process-resources</phase>
+			  <id>StartDeploy</id>
+              <phase>compile</phase>
               <goals>
                 <goal>execute</goal>
               </goals>
-              <configuration>
-                <sqlCommand>
-                  IF OBJECT_ID('dbo.DATABASEDEPLOYLOG') IS NULL
-                  CREATE TABLE dbo.DATABASEDEPLOYLOG (
-                  [Deploy.StartedAt] DATETIME2(0) NOT NULL
-                  , [Deploy.Action] VARCHAR(100)
-                  , [Deploy.ActionOccuredOn] DATETIME2 NOT NULL CONSTRAINT [Def_Deploy.ActionOccuredOn] DEFAULT (SYSDATETIME())
-                  , [Deploy.TriggeredFromPath] VARCHAR(4000)
-                  , [Deploy.TriggeredOnHostName] VARCHAR(100)
-                  , [Package.Version] VARCHAR(500)
-                  , [Package.BuildDate] DATETIME2(0)
-                  , [Package.Binary] VARBINARY(max)
-                  , [Database.Server] VARCHAR(500)
-                  , [Database.Name] VARCHAR(100)
-                  , [Database.Username] VARCHAR(100)
-                  , [Database.Version] VARCHAR(max)
-                  );
-
-                  IF '${project.version}' &lt;&gt; '1.0.0-snapshot'
-                      IF EXISTS (
-                       SELECT 1
-                       FROM dbo.DATABASEDEPLOYLOG
-                       WHERE [Package.Version] NOT LIKE '%.[0-9][0-9][0-9]'
-                       AND [Package.Version] NOT LIKE '%.[0-9][0-9]'
-                       AND CONVERT(int, SUBSTRING(REPLACE('${project.version}', 'dev-unstable-', ''), 1, CHARINDEX('.', REPLACE('${project.version}', 'dev-unstable-', '')) - 1))
-                         &lt; CONVERT(int, SUBSTRING(REPLACE([Package.Version], 'dev-unstable-', ''), 1, CHARINDEX('.', REPLACE([Package.Version], 'dev-unstable-', '')) - 1))
-                      ) RAISERROR ('The version of this package is lower than the one already installed.', 18, 1)
-
-                  INSERT INTO dbo.DATABASEDEPLOYLOG
-                  ( [Deploy.StartedAt] ,
-                  [Deploy.Action] ,
-                  [Deploy.TriggeredFromPath] ,
-                  [Deploy.TriggeredOnHostName] ,
-                  [Package.Version] ,
-                  --[Package.BuildDate] ,
-                  --[Package.Binary] ,
-                  [Database.Server] ,
-                  [Database.Name] ,
-                  [Database.Username] ,
-                  [Database.Version]
-                  )
-                  VALUES  ( '${maven.build.timestamp}' ,
-                  'Started' ,
-                  '${project.basedir}' ,
-                  '${hostname}' ,
-                  '${project.version}' ,
-                  '${database.server}' ,
-                  '${database.name}' ,
-                  '${database.username}' ,
-                  @@VERSION
-                  );
-                </sqlCommand>
-                <printResultSet>true</printResultSet>
-                <autocommit>true</autocommit>
-                <onError>abort</onError>
-              </configuration>
+			  <configuration>
+				<srcFiles>
+					<srcFile>${project.build.outputDirectory}/StartDeploy.sql</srcFile>
+				</srcFiles>			  
+				<url>jdbc:sqlserver://${database.server};databaseName=${database.name}</url>			
+				<username>${database.username}</username>
+				<password>${database.password}</password>			
+				<autocommit>true</autocommit>
+				<onError>abort</onError>
+			  </configuration>
             </execution>
-
-            <execution>
-              <id>CompleteDeploy</id>
+			  
+			<execution>
+			  <id>CompleteDeploy</id>
               <phase>test</phase>
               <goals>
                 <goal>execute</goal>
               </goals>
-              <configuration>
-                <sqlCommand>
-                  INSERT INTO dbo.DATABASEDEPLOYLOG
-                  ( [Deploy.StartedAt] ,
-                  [Deploy.Action] ,
-                  [Deploy.TriggeredFromPath] ,
-                  [Deploy.TriggeredOnHostName] ,
-                  [Package.Version] ,
-                  [Database.Server] ,
-                  [Database.Name] ,
-                  [Database.Username] ,
-                  [Database.Version]
-                  )
-                  VALUES  ( '${maven.build.timestamp}' ,
-                  'Completed' ,
-                  '${project.basedir}' ,
-                  '${hostname}' ,
-                  '${project.version}' ,
-                  '${database.server}' ,
-                  '${database.name}' ,
-                  '${database.username}' ,
-                  @@VERSION
-                  )
-                </sqlCommand>
-                <printResultSet>true</printResultSet>
-                <autocommit>true</autocommit>
-                <onError>abort</onError>
-              </configuration>
-            </execution>
-          </executions>
+			  <configuration>
+				<srcFiles>
+					<srcFile>${project.build.outputDirectory}/StartDeploy.sql</srcFile>
+				</srcFiles>			  
+				<url>jdbc:sqlserver://${database.server};databaseName=${database.name}</url>			
+				<username>${database.username}</username>
+				<password>${database.password}</password>			
+				<autocommit>true</autocommit>
+				<onError>abort</onError>			  </configuration>
+            </execution>			
+		</executions>
         </plugin>
 
         <plugin>
@@ -161,6 +105,45 @@
             </execution>
           </executions>
         </plugin>
+		
+		<plugin>
+		  <groupId>se.qxx.maven.plugins</groupId>
+		  <artifactId>tsqlt-tester-plugin</artifactId>
+		  <version>0.9</version>
+
+          <configuration>
+            <url>jdbc:sqlserver://${database.server};databaseName=${database.name}</url>			
+            <username>${database.username}</username>
+            <password>${database.password}</password>
+			<srcpath>${project.basedir}/test</srcpath>
+			<preparationScripts>
+				<param>${project.parent.basedir}/../../tools/tsqlt/configureoptions.sql</param>
+				<param>${project.parent.basedir}/../../tools/tsqlt/tSQLt.class.sql</param>
+				<param>${project.parent.basedir}/../../tools/tsqlt/tSQLt.patches.sql</param>
+			</preparationScripts>
+			<srcPath>${project.parent.basedir}/test</srcPath>
+			<resultFile>${project.parent.basedir}/target/TEST-${database.name}-junit.xml</resultFile>
+          </configuration>
+          <executions>
+            <execution>
+              <id>tsqlt-test</id>
+              <phase>test</phase>
+              <goals>
+                <goal>test</goal>
+              </goals>			  
+            </execution>
+          </executions>
+		  
+          <dependencies>
+            <dependency>
+              <groupId>com.microsoft.sqlserver</groupId>
+              <artifactId>sqljdbc4</artifactId>
+              <version>4.1</version>
+              <scope>system</scope>
+              <systemPath>${project.basedir}/../../sqljdbc41.jar</systemPath>
+            </dependency>
+          </dependencies>		  
+        </plugin>		
 
         <plugin>
           <groupId>org.liquibase</groupId>
@@ -168,7 +151,7 @@
           <version>3.4.1</version>
           <configuration>
             <promptOnNonLocalDatabase>false</promptOnNonLocalDatabase>
-            <changeLogFile>${project.basedir}/update.xml</changeLogFile>
+            <changeLogFile>${project.basedir}/generated-sources/update.xml</changeLogFile>
             <driver>com.microsoft.sqlserver.jdbc.SQLServerDriver</driver>
             <url>${database.baseurl}</url>
             <username>${database.username}</username>
@@ -227,6 +210,37 @@
           </executions>
         </plugin>
 
+	  <!-- This will replace all @xxx@ parametrs with other values. Mainly used for linked server usage -->
+	  <!-- Typically in a local or ci scenario these would be replaced with empty values to indicate -->
+	  <!-- local queries -->
+	  <plugin>
+		<groupId>com.google.code.maven-replacer-plugin</groupId>
+		<artifactId>replacer</artifactId>
+		<version>1.5.3</version>
+		<executions>
+			<execution>
+				<phase>generate-sources</phase>
+				<goals>
+					<goal>replace</goal>
+				</goals>
+			</execution>
+		</executions>
+		<configuration>
+			<includes>
+				<include>**/*.sql</include>
+				<include>**/*.xml</include>
+			</includes>
+			<basedir>${basedir}</basedir>
+			<outputDir>generated-sources</outputDir>
+			<preserveDir>true</preserveDir>
+			<replacements>
+				<replacement>
+					<token>@NXDB01@</token>
+					<value>${sql.nxdb01}</value>
+				</replacement>
+			</replacements>
+		</configuration>
+	</plugin>																										
 
         <!-- This will disable the plugin, we do not use it for the deploy anyway -->
         <plugin>
@@ -307,28 +321,6 @@
 
         <!-- This will disable the plugin, we do not use it for the deploy anyway -->
         <plugin>
-          <artifactId>maven-resources-plugin</artifactId>
-          <version>2.6</version>
-          <executions>
-            <execution>
-              <id>default-resources</id>
-              <phase>none</phase>
-              <goals>
-                <goal>resources</goal>
-              </goals>
-            </execution>
-            <execution>
-              <id>default-testResources</id>
-              <phase>none</phase>
-              <goals>
-                <goal>testResources</goal>
-              </goals>
-            </execution>
-          </executions>
-        </plugin>
-
-        <!-- This will disable the plugin, we do not use it for the deploy anyway -->
-        <plugin>
           <artifactId>maven-site-plugin</artifactId>
           <version>3.3</version>
           <executions>
@@ -348,7 +340,6 @@
             </execution>
           </executions>
         </plugin>
-
       </plugins>
     </pluginManagement>
 
@@ -365,6 +356,12 @@
         <artifactId>maven-assembly-plugin</artifactId>
       </plugin>
     </plugins>
+	<resources>
+      <resource>
+        <directory>${project.basedir}/../../scripts</directory>
+		<filtering>true</filtering>
+      </resource>  
+	</resources>
   </build>
 
 	<modules>
