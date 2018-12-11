@@ -75,13 +75,14 @@
               </goals>
 			  <configuration>
 				<srcFiles>
-					<srcFile>${project.build.outputDirectory}/StartDeploy.sql</srcFile>
+					<srcFile>${project.build.outputDirectory}/CompleteDeploy.sql</srcFile>
 				</srcFiles>			  
 				<url>jdbc:sqlserver://${database.server};databaseName=${database.name}</url>			
 				<username>${database.username}</username>
 				<password>${database.password}</password>			
 				<autocommit>true</autocommit>
-				<onError>abort</onError>			  </configuration>
+				<onError>abort</onError>			  
+			  </configuration>
             </execution>			
 		</executions>
         </plugin>
@@ -235,8 +236,8 @@
 			<preserveDir>true</preserveDir>
 			<replacements>
 				<replacement>
-					<token>@NXDB01@</token>
-					<value>${sql.nxdb01}</value>
+					<token>@LINKEDSERVER@</token>
+					<value>${sql.linkedserver}</value>
 				</replacement>
 			</replacements>
 		</configuration>
