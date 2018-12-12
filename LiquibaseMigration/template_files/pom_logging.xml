@@ -1,0 +1,127 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                      http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  
+  <groupId>com.peter.henell.liquibase</groupId>
+  <artifactId>playground</artifactId>
+  <version>1.0.0-snapshot</version>
+
+  <properties>
+
+  </properties>
+  
+  <dependencies>
+	<dependency>
+	   <groupId>org.bgee.log4jdbc-log4j2</groupId>
+	   <artifactId>log4jdbc-log4j2-jdbc4</artifactId>
+	   <version>1.16</version>
+	</dependency>
+	
+	  <!-- your own standard logging dependencies -->
+	  <dependency>
+		  <groupId>org.slf4j</groupId>
+		  <artifactId>slf4j-api</artifactId>
+		  <version>1.7.5</version>
+	  </dependency>
+	  <dependency>
+		  <groupId>org.slf4j</groupId>
+		  <artifactId>slf4j-log4j12</artifactId>
+		  <version>1.7.5</version>
+	  </dependency>	
+	  
+	<!-- special dependency to fix liquibase's logging fetish -->
+	<dependency>
+		<groupId>com.mattbertolini</groupId>
+		<artifactId>liquibase-slf4j</artifactId>
+		<version>1.2.1</version>
+	</dependency>	  
+  </dependencies>
+
+  
+  <build>
+    <pluginManagement>
+      <plugins>
+		<plugin>
+		  <groupId>org.apache.maven.plugins</groupId>
+		  <artifactId>maven-assembly-plugin</artifactId>
+		  <version>2.4</version>
+		  <configuration>
+				<descriptors>
+				  <descriptor>${project.basedir}/assembly.xml</descriptor>
+				</descriptors>
+		  </configuration>
+		  <executions>
+				<execution>
+				  <id>make-assembly</id> <!-- this is used for inheritance merges -->
+				  <phase>package</phase> <!-- append to the packaging phase. -->
+				  <goals>
+					<goal>single</goal> <!-- goals == mojos -->
+				  </goals>
+				</execution>
+		  </executions>
+		</plugin>
+      </plugins>
+    </pluginManagement>
+    
+    <plugins>
+      <plugin>
+		<groupId>org.apache.maven.plugins</groupId>
+		<artifactId>maven-assembly-plugin</artifactId>
+      </plugin>
+      
+      <plugin>
+		<groupId>org.liquibase</groupId>
+		<artifactId>liquibase-maven-plugin</artifactId>
+		<version>3.3.3</version>
+		<configuration>
+          <promptOnNonLocalDatabase>false</promptOnNonLocalDatabase>
+          <changeLogFile>${project.basedir}/update.xml</changeLogFile>
+		  <propertyFile>${project.basedir}/Liquibase.properties</propertyFile>
+		  <liquibaseShouldRun>true</liquibaseShouldRun>
+		  <logging>debug</logging>
+		  <logfile>log/liquibase.log</logfile>
+        </configuration>
+		<executions>
+			  <execution>
+				<phase>process-resources</phase>
+				<goals>
+				  <goal>update</goal>
+				</goals>
+			  </execution>
+		</executions>
+
+		<dependencies>
+			<dependency>
+			   <groupId>org.bgee.log4jdbc-log4j2</groupId>
+			   <artifactId>log4jdbc-log4j2-jdbc4</artifactId>
+			   <version>1.16</version>
+			</dependency>
+		  
+			<!-- your own standard logging dependencies -->
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>1.7.5</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-log4j12</artifactId>
+				<version>1.7.5</version>
+			</dependency>	
+
+			<!-- special dependency to fix liquibase's logging fetish -->
+			<dependency>
+				<groupId>com.mattbertolini</groupId>
+				<artifactId>liquibase-slf4j</artifactId>
+				<version>1.2.1</version>
+			</dependency>	  
+		  
+		</dependencies>
+  
+      </plugin>
+    </plugins>
+  </build>
+  
+</project>

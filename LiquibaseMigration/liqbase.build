@@ -1,0 +1,1094 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<project name="Simple" default="build">
+
+  <!-- Folders -->
+  <property name="database.name" value="" overwrite="false" />
+  <property name="source.server" value="" overwrite="false" />
+
+  <!-- Arrays -->
+  <property name="list.folders.base" value="Tables,Assemblies,Security\Schemas,Security\Roles,Security\Asymmetric Keys,Security\Certificates,Security\Symmetric Keys,Views,Stored Procedures,Functions,Types\User-defined Data Types,Types\XML Schema Collections,Storage\Partition Schemes,Storage\Partition Functions,Data,Database Triggers,Defaults,Extended Properties,Rules,Search property Lists,Sequences,Synonyms,Service Broker\Contracts,Service Broker\Event Notifications,Service Broker\Message Types,Service Broker\Queues,Service Broker\Remote Service Bindings,Service Broker\Routes,Service Broker\Services" />
+  <property name="list.runonchange" value="Views,Stored Procedures,Functions,Storage\Partition Schemes,Storage\Partition Functions" />
+  <property name="list.dontAddChangeSetForEachDDL" value="Stored Procedures,Functions,Security\Users,Security\Schemas" />
+
+  <!-- Options -->
+  <property name="option.deploy" value="false" overwrite="false" />
+  <property name="option.commit" value="false" overwrite="false" />
+  <property name="option.dropdatabase" value="false" overwrite="false" />
+  <property name="option.includeusers" value="true" overwrite="false" />
+
+  <property name="loglevel" value="info" overwrite="false" />
+
+  <!-- Set target server to source server if not specified -->
+  <property name="target.server" value="${source.server}" overwrite="false" if="${not option.deploy}" />
+  <property name="target.username" value="sa" overwrite="false" if="${not option.deploy}" />
+  <property name="target.password" value="hemligt" overwrite="false" if="${not option.deploy}" />
+  <property name="target.datapath" value="" overwrite="false" />
+  <property name="target.logpath" value="" overwrite="false" />
+
+  <fail if="${not property::exists('target.server') and not option.deploy}" />
+  <fail if="${not property::exists('target.username') and not option.deploy}" />
+  <fail if="${not property::exists('target.password') and not option.deploy}" />
+
+  <!-- Executables -->
+  <property name="executable.sqlcmd" value="C:\Program Files\Microsoft SQL Server\100\Tools\Binn\sqlcmd.exe" />
+  <property name="executable.tf" value="c:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\tf.exe" overwrite="false" />
+
+  <!-- Search paths for executables -->
+  <property name="executable.sqlcmd.searchpath" value="C:\Program Files\Microsoft SQL Server\120\Tools\Binn;C:\Program Files\Microsoft SQL Server\110\Tools\Binn;C:\Program Files\Microsoft SQL Server\100\Tools\Binn" />
+  <property name="executable.tf.searchpath" value="c:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\IDE;c:\Program Files (x86)\Microsoft Visual Studio 11.0\Common7\IDE;c:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE" />
+
+  <include buildfile="clrtasks.build" />
+
+  <!--******************************************************-->
+  <!--************ FUNCTIONS *******************************-->
+  <!--******************************************************-->
+
+  <target name="findExec">
+    <fail if="${not property::exists('param.exec.searchpath')}" />
+    <fail if="${not property::exists('param.exec.name')}" />
+
+    <property name="param.exec.returnvalue" value="" />
+    <echo message="Finding ${param.exec.name} ..." />
+    <foreach item="String" in="${param.exec.searchpath}" delim=";" property="path">
+      <property name="param.exec.trypath" value="${path}\${param.exec.name}" />
+
+      <if test="${property::get-value('param.exec.returnvalue') == '' and file::exists(property::get-value('param.exec.trypath'))}">
+        <echo message="${param.exec.name} found at path ${path}" />
+        <property name="param.exec.returnvalue" value="${param.exec.trypath}" />
+      </if>
+    </foreach>
+
+    <fail if="${property::get-value('param.exec.returnvalue') == ''}" message="Executable not found :: ${param.exec.name}" />
+  </target>
+
+  <!--******************************************************-->
+  <!--************ TARGETS *********************************-->
+  <!--******************************************************-->
+
+  <target name="setup-properties">
+    <fail if="${database.name == '' or source.server == ''}" message="Properties database.name and source.server must be set" />'
+
+    <echo message="" />
+    <echo message="Setting folder properties ... " />
+    <echo message="" />
+
+    <property name="folder.build.root" value="${directory::get-current-directory()}" />
+    <property name="folder.build.parent" value="${folder.build.root}\build" />
+    <property name="folder.build" value="${folder.build.parent}\${module}\db" />
+    <property name="folder.template" value="${folder.build.root}\template_files" />
+    <property name="folder.temp" value="${folder.build.root}\temp\${database.name}" />
+
+    <property name="list.folders" value="${list.folders.base}" />
+    <property name="list.folders" value="Security\Users,${list.folders}" if="${option.includeusers}" />
+  </target>
+
+  <target name="init" verbose="true" depends="setup-properties">
+
+    <echo message="" />
+    <echo message="Creating directories ..." />
+    <echo message="" />
+
+    <delete dir="${folder.build}" />
+    <delete dir="${folder.temp}" />
+
+    <mkdir dir="${folder.build}" />
+
+    <mkdir dir="${folder.build}\Deploy" />
+    <mkdir dir="${folder.build}\Assemblies" />
+    <mkdir dir="${folder.build}\Data" />
+    <mkdir dir="${folder.build}\Database Triggers" />
+    <mkdir dir="${folder.build}\Defaults" />
+    <mkdir dir="${folder.build}\Extended Properties" />
+    <mkdir dir="${folder.build}\Functions" />
+    <mkdir dir="${folder.build}\Rules" />
+    <mkdir dir="${folder.build}\Search property Lists" />
+    <mkdir dir="${folder.build}\Security" />
+    <mkdir dir="${folder.build}\Security\Asymmetric Keys" />
+    <mkdir dir="${folder.build}\Security\Certificates" />
+    <mkdir dir="${folder.build}\Security\Roles" />
+    <mkdir dir="${folder.build}\Security\Schemas" />
+    <mkdir dir="${folder.build}\Security\Symmetric Keys" />
+    <mkdir dir="${folder.build}\Security\Users" />
+    <mkdir dir="${folder.build}\Sequences" />
+    <mkdir dir="${folder.build}\Service Broker\Contracts" />
+    <mkdir dir="${folder.build}\Service Broker\Event Notifications" />
+    <mkdir dir="${folder.build}\Service Broker\Message Types" />
+    <mkdir dir="${folder.build}\Service Broker\Queues" />
+    <mkdir dir="${folder.build}\Service Broker\Remote Service Bindings" />
+    <mkdir dir="${folder.build}\Service Broker\Routes" />
+    <mkdir dir="${folder.build}\Service Broker\Services" />
+    <mkdir dir="${folder.build}\Storage" />
+    <mkdir dir="${folder.build}\Storage\Full Text Catalogs" />
+    <mkdir dir="${folder.build}\Storage\Full Text Stoplists" />
+    <mkdir dir="${folder.build}\Storage\Partition Functions" />
+    <mkdir dir="${folder.build}\Storage\Partition Schemes" />
+    <mkdir dir="${folder.build}\Storage\File Groups" />
+    <mkdir dir="${folder.build}\Stored Procedures" />
+    <mkdir dir="${folder.build}\Synonyms" />
+    <mkdir dir="${folder.build}\Tables" />
+    <mkdir dir="${folder.build}\Table triggers" />
+    <mkdir dir="${folder.build}\View triggers" />    
+    <mkdir dir="${folder.build}\Types" />
+    <mkdir dir="${folder.build}\Types\User-defined Data Types" />
+    <mkdir dir="${folder.build}\Types\XML Schema Collections" />
+    <mkdir dir="${folder.build}\Views" />
+    <mkdir dir="${folder.build}\ConstraintFunctions" />
+
+    <mkdir dir="${folder.build}\log" />
+    <mkdir dir="${folder.temp}" />
+
+    <echo message="" />
+    <echo message="Creating xml structures ..." />
+    <echo message="" />
+
+    <copy file="${folder.template}\deploymaster_redgate.xml" tofile="${folder.build}\update.xml" />
+
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Assemblies\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Data\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Database Triggers\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Defaults\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Extended Properties\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Functions\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Rules\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Search property Lists\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Asymmetric Keys\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Certificates\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Roles\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Schemas\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Symmetric Keys\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Security\Users\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Sequences\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Contracts\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Event Notifications\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Message Types\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Queues\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Remote Service Bindings\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Routes\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Service Broker\Services\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Storage\Full Text Catalogs\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Storage\Full Text Stoplists\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Storage\Partition Functions\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Storage\Partition Schemes\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Stored Procedures\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Synonyms\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Tables\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Table triggers\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\View triggers\master.xml" />    
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Types\User-defined Data Types\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Types\XML Schema Collections\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\Views\master.xml" />
+    <copy file="${folder.template}\submaster.xml" tofile="${folder.build}\ConstraintFunctions\master.xml" />
+
+    <copy file="${folder.template}\Liquibase.properties.template" todir="${folder.build}" />
+    <copy file="${folder.template}\run_liquibase.bat" todir="${folder.build}\" />
+    <copy file="${folder.template}\pom.xml" todir="${folder.build}\">
+      <filterchain>
+        <replacetokens>
+          <token key="DATABASENAME" value="${string::to-lower(database.name)}" />
+          <token key="LOGLEVEL" value="${string::to-lower(loglevel)}" />
+          <token key="PACKAGE" value="${string::to-lower(packagename)}" />
+        </replacetokens>
+      </filterchain>
+    </copy>
+    <copy file="${folder.template}\assembly.xml" todir="${folder.build.parent}\" />
+
+    <echo message="" />
+    <echo message="Adding liquibase binaries ..." />
+    <echo message="" />
+
+    <copy todir="${folder.build.parent}" file="${folder.template}\liquibase-app\lib\sqljdbc41.jar" />
+
+    <attrib readonly="false">
+      <fileset basedir="${folder.build}">
+        <include name="**/*" />
+      </fileset>
+    </attrib>
+  </target>
+
+  <target name="findExecutables">
+    <property name="param.exec.searchpath" value="${executable.tf.searchpath}" />
+
+    <property name="param.exec.searchpath" value="${executable.sqlcmd.searchpath}" />
+    <property name="param.exec.name" value="sqlcmd.exe" />
+    <call target="findExec" />
+    <property name="executable.sqlcmd" value="${param.exec.returnvalue}" />
+  </target>
+
+  <target name="drop-target-database" if="${option.deploy and option.dropdatabase}">
+    <property name="target.logpath" if="${target.logpath==''}" value="${target.datapath}" />
+    <exec program="${executable.sqlcmd}"  failonerror="true">
+      <arg value="-E"/>
+      <arg value="-S"/>
+      <arg value="${target.server}"/>
+      <arg value="-d" />
+      <arg value="master" />
+      <arg value="-i"/>
+      <arg value="${folder.template}\drop_database.sql"/>
+      <arg value="-v" />
+      <arg value="databasename=${database.name}"  />
+      <arg value="datapath=&quot;${target.datapath}&quot;" />
+      <arg value="logpath=&quot;${target.logpath}&quot;" />
+    </exec>
+  </target>
+
+  <target name="setup-db-deploy">
+    <!-- The purpose of this target is to initiate the database with database specific options such as filegroups -->
+	<!-- TODO: generalize -->
+	
+	<!-- TODO: for each file in deploy catalog -->
+	<!-- db_xxxx_yyyyy.sql - if filename starts with db then it should only be present for a specific database -->
+	<!-- otherwise for all -->
+    <property name="list.files" value="database_deploy.sql" />
+    
+    <property name="deploy.files" value="" />
+
+    <foreach item="String" in="${list.files}" delim="," property="file">
+      <echo message="Adding setup file :: ${file}" />
+      <property name="deploy.files" value="${deploy.files}&#xa;   &lt;include file=&quot;${file}&quot; relativeToChangelogFile=&quot;true&quot; /&gt;" />
+
+      <copy file="${folder.template}\${file}" todir="${folder.build}\Deploy">
+        <filterchain>
+          <replacetokens>
+            <token key="DATABASENAME" value="${database.name}" />
+          </replacetokens>
+        </filterchain>
+      </copy>
+
+    </foreach>
+
+    <echo message="Files in deploy structure :: ${deploy.files}" />
+
+    <echo file="${folder.build}\Deploy\master.xml">
+      <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+	
+	<!-- START OF FILE LIST -->
+		  ${deploy.files}
+	<!-- END OF FILE LIST -->
+</databaseChangeLog>
+]]>
+    </echo>
+
+  </target>
+
+
+  <target name="setup-redgate-style">
+    <property name="cc" value="0" />
+
+    <foreach item="String" in="${list.folders}" delim="," property="folder">
+      <property name="masterdata.file" value="${folder.build}\${folder}\master.xml" />
+
+      <property name="user" value="${environment::get-user-name()}" />
+      <property name="user" value="proc" if="${folder == 'Stored Procedures'}" />
+      <property name="user" value="func" if="${folder == 'Functions'}" />
+      <property name="user" value="view" if="${folder == 'Views'}" />
+
+      <!-- create header of master file -->
+      <echo file="${masterdata.file}">
+        <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+	
+	<!-- START OF FILE LIST -->
+]]>
+      </echo>
+      <property name="folder.redgate.item" value="${folder.redgate}\${folder}" />
+
+      <echo message="Processing redgate folder :: ${folder.redgate.item}" />
+      <if test="${directory::exists(folder.redgate.item)}">
+        <foreach item="File" in="${folder.redgate.item}" property="filename">
+          <if test="${file::get-length(filename) > 0}">
+
+            <property name="runonchange" value="${string::to-lower(string::contains(list.runonchange, folder))}" />
+            <property name="addChangeSetForEachDDL" value="${string::to-lower(not string::contains(list.dontAddChangeSetForEachDDL, folder))}" />
+            <property name="targetfile" value="${folder.build}\${folder}\${path::get-file-name(filename)}" />
+            <property name="changeset" value="${string::replace(path::get-file-name-without-extension(filename), '.', '-')}" />
+            <property name="changeset" value="${string::replace(changeset, ' ', '-')}" />
+
+            <loadfile file="${filename}" property="source" encoding="UTF-8" />
+            <property name="result" value="${source}" />
+
+            <!-- Remove empty GO statements -->
+            <regexreplace
+              input="${result}"
+              pattern="^\s*GO\s*$"
+              replacement=""
+              property="result"
+              options="IgnoreCase,IgnorePatternWhitespace" />
+
+            <echo message="Processing file ${path::get-file-name(filename)} ... Size :: ${file::get-length(filename)}" />
+
+            <!-- Write the result to file if not empty -->
+            <if test="${string::get-length(result) != 0}">
+
+              <!-- write each file to the master file -->
+              <echo file="${masterdata.file}" append="true">
+                <![CDATA[        <include file="${path::get-file-name(filename)}" relativeToChangelogFile="true" />
+	]]>
+              </echo>
+
+
+
+              <!-- Replace GO statements with leading and trailing blanks (except GOTO statements) -->
+              <regexreplace
+                input="${result}"
+                pattern="^\s*GO(?!TO)\s*$"
+                replacement="GO"
+                property="result"
+                options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+              <!-- Replace GOTO statements that have no leading spaces. Liquibase interprets these as GO statements. doh! -->
+              <regexreplace
+                input="${result}"
+                pattern="^GOTO"
+                replacement="   GOTO"
+                property="result"
+                options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+                
+                
+
+              <if test="${addChangeSetForEachDDL}">
+                <!-- Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP -->
+                <!-- pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)" -->
+
+                <regexreplace
+                  input="${result}"
+                  pattern="((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
+                  replacement="&#xa;--changeSet ${user}:Initial-${changeset}-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:${runonchange}&#xa;$1&#xa;$6"
+                  property="result"
+                  options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline" />
+
+                <!-- Set ANSI_PADDING ON for creation of xml indexes -->
+                <regexreplace
+                  input="${result}"
+                  pattern="^(\s*)(CREATE\s*PRIMARY\s*XML\s*INDEX)"
+                  replacement="&#xa;SET ANSI_PADDING ON;&#xa;$2"
+                  property="result"
+                  options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+                <!-- Replace the ${cc} created above with an iterator -->
+                <replaceiterator
+                  input="${result}"
+                  pattern="{cc}"
+                  property="result"
+                  options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+              </if>
+
+
+              <!-- Remove all permissions -->
+              <regexreplace
+                input="${result}"
+                pattern="^\s*GRANT\s*(EXECUTE|SELECT|INSERT|UPDATE|DELETE)\s*ON.*?TO.*?\r?$"
+                replacement=""
+                property="result"
+                options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+              <!-- Remove all role memberships if users are not included -->
+              <regexreplace
+                input="${result}"
+                pattern="^\s*EXEC(UTE)?\s*sp_addrolemember\s*N?'.*?'\s*,\s*N?'.*?'\s*\n\s*GO$"
+                replacement=""
+                property="result"
+                options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline"
+                unless="${option.includeusers}" />
+
+              <!-- Remove all USE statements -->
+              <regexreplace
+                input="${result}"
+                pattern="^USE\s+\[?(.*?)\]?\s*GO"
+                replacement=""
+                property="result"
+                options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline" />
+
+              <!-- if this is a type where we should not create separate changesets just dump the code with a changeset comment -->
+              <if test="${not addChangeSetForEachDDL}">
+                <property name="result" value="&#xa;--changeSet ${user}:Initial-${changeset}-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:${runonchange}&#xa;${result}" />
+              </if>
+
+              <echo file="${targetfile}" message="--liquibase formatted sql&#xa;${result}" append="false" />
+            </if>
+
+          </if>
+        </foreach>
+      </if>
+
+      <!-- create footer of master file -->
+      <echo file="${masterdata.file}" append="true">
+        <![CDATA[	<!-- END OF FILE LIST -->
+</databaseChangeLog>
+]]>
+      </echo>
+
+    </foreach>
+  </target>
+
+  <target name="sub-change-object-order">
+    <!-- SUB target that replaces the file list with that returned from an SQL query -->
+    <fail if="${not property::exists('param.objecttype')}" message="param.objecttype is not set" />
+    <fail if="${not property::exists('param.folder')}" message="param.folder is not set" />
+    <fail if="${not property::exists('param.sqlfile')}" message="param.sqlfile is not set" />
+    <fail if="${not property::exists('param.outputfile')}" message="param.outputfile is not set" />
+
+    <echo message="Running object order on ${param.objecttype} ..." />
+
+    <if test="${file::exists(param.sqlfile)}">
+      <property name="masterfile" value="${folder.build}\${param.folder}\master.xml" />
+
+      <echo message="Modifying ${masterfile} for order of object creation ..." />
+      <loadfile file="${masterfile}" property="masterdata.source" encoding="UTF-8" />
+
+      <exec program="${executable.sqlcmd}"  failonerror="true">
+        <arg value="-E"/>
+        <arg value="-S"/>
+        <arg value="${source.server}"/>
+        <arg value="-d" />
+        <arg value="${database.name}" />
+        <arg value="-i"/>
+        <arg value="${param.sqlfile}"/>
+        <arg value="-o" />
+        <arg value="${folder.temp}\${param.outputfile}" />
+        <arg value="-W" />
+        <arg value="-v" />
+        <arg value="type=${param.objecttype}" />
+        <arg value="-h-1" />
+      </exec>
+
+      <loadfile file="${folder.temp}\${param.outputfile}" property="neworder" encoding="UTF-8"/>
+
+      <!-- <regexreplace 
+				input="${neworder}" 
+				pattern="^\s*-\s*&lt;"
+				replacement="    &lt;"
+				property="neworder"
+				options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline" /> -->
+    
+    <!-- check that file exist -->                
+    <property name="neworder-filtered" value="" />
+    <regexmatches
+       pattern="^(?'paramrow'\s*\&lt;include\s*file=\&quot;(?'paramfile'[^&quot;]*)&quot;.*)$" 
+       input="${neworder}"
+       options="IgnoreCase,Multiline,IgnorePatternWhitespace" 
+       failonerror="false">
+
+       <property name="param.file.path" value="${folder.build}\${param.folder}\${paramfile}" />
+       <echo message="checking for file ${param.file.path}" />
+       <property name="neworder-filtered" value="${neworder-filtered}&#xa;${paramrow}" if="${file::exists(param.file.path)}"/>
+       
+    </regexmatches> 
+    
+    <!-- check the new generated source and delete all files that are not present in the masterdata -->
+    <foreach item="File" in="${folder.build}\${param.folder}" property="filename">
+        <echo message="Checking master data for file :: ${filename}" />
+        <if test="${string::index-of(neworder-filtered, path::get-file-name(filename)) &lt; 0}">
+            <delete file="${filename}" />
+        </if>
+    </foreach>
+
+    <!-- replace the masterdata with the newly created order of files -->
+    <regexreplace
+        input="${masterdata.source}"
+        pattern="\&lt;\!--\sSTART\sOF\sFILE\sLIST\s--\&gt;(.*?)\&lt;\!--\sEND\sOF\sFILE\sLIST\s--\&gt;"
+        replacement="&lt;!-- START OF FILE LIST --&gt;&#xa;${neworder-filtered}&#xa;    &lt;!-- END OF FILE LIST --&gt;&#xa;"
+        property="result"
+        options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline" />
+      
+      <echo file="${masterfile}" message="${result}" />
+    </if>
+  </target>
+
+  <target name="change-object-order">
+    <!-- The purpose of this target is to sort tables, functions and views to execute in the correct order -->
+    <property name="param.objecttype" value="TABLES" />
+    <property name="param.sqlfile" value="${folder.template}\ChangeOrderOfTableCreation2.sql" />
+    <property name="param.folder" value="Tables" />
+    <property name="param.outputfile" value="table-order.txt" />
+    <call target="sub-change-object-order" />
+
+    <property name="param.objecttype" value="VIEW" />
+    <property name="param.sqlfile" value="${folder.template}\ChangeorderOfFunctionAndViews2.sql" />
+    <property name="param.folder" value="Views" />
+    <property name="param.outputfile" value="view-order.txt" />
+    <call target="sub-change-object-order" />
+
+    <property name="param.objecttype" value="FUNCTION" />
+    <property name="param.sqlfile" value="${folder.template}\ChangeorderOfFunctionAndViews2.sql" />
+    <property name="param.folder" value="Functions" />
+    <property name="param.outputfile" value="function-order.txt" />
+    <call target="sub-change-object-order" />
+
+    <property name="param.objecttype" value="ASSEMBLY" />
+    <property name="param.sqlfile" value="${folder.template}\ChangeOrderOfAssemblies.sql" />
+    <property name="param.folder" value="Assemblies" />
+    <property name="param.outputfile" value="assembly-order.txt" />
+    <call target="sub-change-object-order" />
+
+  </target>
+
+  <target name="setup-data">
+    <!-- The purpose of this target is to sort the data files to execute in the correct order according to foreign keys -->
+    <property name="dataobjects" value="" />
+
+    <foreach item="File" in="${folder.build}\Data" property="filename">
+      <property name="datafile" value="${path::get-file-name(filename)}" />
+      <if test="${string::ends-with(filename,'_Data.sql')}">
+
+        <property name="schema" value="${string::substring(datafile,0,string::index-of(datafile, '.'))}" />
+        <property name="table" value="${string::substring(datafile,string::index-of(datafile, '.') + 1,string::get-length(datafile) - string::index-of(datafile, '.') - 10)}" />
+
+        <echo message="Processing data file ${datafile} :: ${schema} :: ${table}" />
+        <property name="dataobjects" value="${dataobjects}&#xa;INSERT INTO #tables (schemaName, tableName) VALUES ('${schema}', '${table}');" />
+      </if>
+
+    </foreach>
+
+    <copy file="${folder.template}\ChangeOrderOfDataScripts.sql" tofile="${folder.temp}\datascript.sql">
+      <filterchain>
+        <replacetokens>
+          <token key="OBJECTS" value="${dataobjects}" />
+        </replacetokens>
+      </filterchain>
+    </copy>
+
+    <property name="param.objecttype" value="DATA" />
+    <property name="param.sqlfile" value="${folder.temp}\datascript.sql" />
+    <property name="param.folder" value="Data" />
+    <property name="param.outputfile" value="data-order.txt" />
+    <call target="sub-change-object-order" />
+
+  </target>
+  
+  <target name="handle-check-constraints">
+    <!-- The purpose of this target is to move all functions that are part of a check constraint to execute before table creation -->
+
+    <!-- get definition on check constraints -->
+    <exec program="${executable.sqlcmd}"  failonerror="false">
+      <arg value="-E"/>
+      <arg value="-S"/>
+      <arg value="${source.server}"/>
+      <arg value="-d" />
+      <arg value="${database.name}" />
+      <arg value="-Q"/>
+      <arg value="SET NOCOUNT ON;SELECT definition FROM sys.check_constraints UNION ALL SELECT definition FROM sys.default_constraints"/>
+      <arg value="-o" />
+      <arg value="${folder.temp}\checkconstraints.txt" />
+      <arg value="-W" />
+    </exec>
+
+    <loadfile file="${folder.temp}\checkconstraints.txt" property="constraints" encoding="UTF-8"/>
+    <loadfile file="${folder.build}\Functions\master.xml" property="function.master" encoding="UTF-8" />
+    <loadfile file="${folder.build}\ConstraintFunctions\master.xml" property="constraintfunctions.master" encoding="UTF-8"/>
+
+    <!-- run regex \[(.*?)\]\.\[(.*?)\]\(.*?\) (RightToLeft) to get the function name and schema name -->
+    <regexmatches
+			   pattern="\[(?'schema'.*?)\]\.\[(?'objectname'.*?)\]\(.*?\)"
+			   input="${constraints}"
+			   options="IgnoreCase,Multiline,Singleline,IgnorePatternWhitespace,RightToLeft"
+			   failonerror="false">
+
+      <!-- Find the function sql file and move it into ConstraintFunctions -->
+      <move file="${folder.build}\Functions\${schema}.${objectname}.sql" todir="${folder.build}\ConstraintFunctions" failonerror="false" />
+      <echo message="Schema :: ${schema} - Object :: ${objectname}" />
+
+      <property name="object-full-name" value="${schema}.${objectname}" />
+
+      <!-- Remove the reference from function master -->
+      <regexreplace
+        input="${function.master}"
+        pattern="^\s*\&lt;include\s*file=&quot;${object-full-name}\.sql&quot;.*?$"
+        replacement="&lt;!-- ${object-full-name} Moved to constraint functions --&gt;"
+        property="function.master"
+        options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+      <!-- only add once -->
+      <if test="${string::index-of(constraintfunctions.master, object-full-name + '.sql') &lt; 0}">
+        <!-- Add it to ConstraintFunctions master -->
+        <regexreplace
+          input="${constraintfunctions.master}"
+          pattern="^\s*\&lt;\!--\sEND"
+          replacement="	&lt;include file=&quot;${object-full-name}.sql&quot; relativeToChangelogFile=&quot;true&quot; /&gt;&#xa;	&lt;!-- END"
+          property="constraintfunctions.master"
+          options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <echo message="REPLACE FIRST ${object-full-name}" />
+      </if>
+    </regexmatches>
+
+    <!-- Output resulting texts to each master file -->
+    <echo file="${folder.build}\Functions\master.xml" message="${function.master}" />
+    <echo file="${folder.build}\ConstraintFunctions\master.xml" message="${constraintfunctions.master}" />
+
+  </target>
+
+  <target name="handle-view-functions">
+    <!-- The purpose of this target is to move all functions referenced by views to ConstraintFunctions -->
+    <!-- get list of functions used in views -->
+    <exec program="${executable.sqlcmd}"  failonerror="false">
+      <arg value="-E"/>
+      <arg value="-S"/>
+      <arg value="${source.server}"/>
+      <arg value="-d" />
+      <arg value="${database.name}" />
+      <arg value="-i"/>
+      <arg value="${folder.template}\GetReferencedFunctionsByView.sql"/>
+      <arg value="-o" />
+      <arg value="${folder.temp}\view-references.txt" />
+      <arg value="-y0" />
+      <arg value="-s;" />
+    </exec>
+
+    <loadfile file="${folder.build}\Functions\master.xml" property="function.master" encoding="UTF-8" />
+    <loadfile file="${folder.build}\ConstraintFunctions\master.xml" property="constraintfunctions.master" encoding="UTF-8"/>
+
+    <foreach item="Line" in="${folder.temp}\view-references.txt" delim=";" property="schema,objectname,fullname">
+      <property name="fullname" value="${string::trim(fullname)}" />
+
+      <!-- Find the function sql file and move it into ConstraintFunctions -->
+      <move file="${folder.build}\Functions\${fullname}.sql" todir="${folder.build}\ConstraintFunctions" failonerror="false" />
+      <echo message="Schema :: ${schema} - Object :: ${objectname}" />
+
+      <!-- Remove the reference from function master -->
+      <regexreplace
+				input="${function.master}"
+				pattern="^\s*\&lt;include\s*file=&quot;${fullname}.sql&quot;.*?$"
+				replacement="&lt;!-- Moved to constraint functions --&gt;"
+				property="function.master"
+				options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+      <!-- only add once -->
+      <if test="${string::index-of(constraintfunctions.master, fullname + '.sql') &lt; 0}">
+        <!-- Add it to ConstraintFunctions master -->
+        <regexreplace
+            input="${constraintfunctions.master}"
+            pattern="^\s*\&lt;\!--\sEND"
+            replacement="	&lt;include file=&quot;${fullname}.sql&quot; relativeToChangelogFile=&quot;true&quot; /&gt;&#xa;	&lt;!-- END"
+            property="constraintfunctions.master"
+            options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <echo message="REPLACE FIRST ${fullname}" />
+      </if>
+
+    </foreach>
+
+    <!-- Output resulting texts to each master file -->
+    <echo file="${folder.build}\Functions\master.xml" message="${function.master}" />
+    <echo file="${folder.build}\ConstraintFunctions\master.xml" message="${constraintfunctions.master}" />
+
+
+  </target>
+
+  <target name="fix-data-script">
+    <property name="user" value="${environment::get-user-name()}" />
+
+    <!-- The purpose of this target is to insert a changeset comment in all data files -->
+    <foreach item="File" in="${folder.build}\Data" property="filename">
+      <if test="${string::ends-with(filename, '.sql')}">
+        <echo message="Processing file ${path::get-file-name(filename)}" />
+
+        <loadfile file="${filename}" property="datafile" encoding="UTF-8"/>
+        <property name="changeset" value="${string::replace(path::get-file-name-without-extension(filename), '.', '-')}" />
+        <property name="changeset" value="${string::replace(changeset, ' ', '-')}" />
+
+        <regexreplace
+					input="${datafile}"
+					pattern="--liquibase\sformatted\ssql"
+					replacement="--liquibase formatted sql&#xa;&#xa;--changeSet ${user}:Initial-${changeset}-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false"
+					property="datafile"
+					options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <echo file="${filename}" message="${datafile}" />
+      </if>
+    </foreach>
+  </target>
+
+  <target name="handle-invalid-objects">
+    <!-- The purpose of this target is to replace invalid redgate files that starts with ALTER FUNCTION / ALTER PROCEDURE -->
+    <foreach item="String" in="Stored Procedures,Functions" delim="," property="folder">
+      <property name="folder" value="${folder.build}\${folder}" />
+
+      <property name="regex" value="^\s*ALTER\s*FUNCTION" />
+      <property name="regex" value="^\s*ALTER\s*PROC(EDURE)?" if="${folder == 'Stored Procedures'}" />
+
+      <property name="replacement" value="CREATE FUNCTION" />
+      <property name="replacement" value="CREATE PROCEDURE" if="${folder == 'Stored Procedures'}" />
+
+      <foreach item="File" in="${folder}" property="filename">
+        <loadfile file="${filename}" property="content" encoding="UTF-8"/>
+
+        <!-- replace existing ALTER with CREATE -->
+        <regexreplace
+						input="${content}"
+						pattern="${regex}"
+						replacement="${replacement}"
+						property="content"
+						options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <echo file="${filename}" message="${content}" />
+      </foreach>
+    </foreach>
+  </target>
+
+  <target name="handle-object-creation">
+    <!-- SELECT collation_name FROM sys.databases WHERE database_id = DB_ID() -->
+	<exec program="${executable.sqlcmd}"  failonerror="false">
+      <arg value="-E"/>
+      <arg value="-S"/>
+      <arg value="${source.server}"/>
+      <arg value="-d" />
+      <arg value="${database.name}" />
+      <arg value="-Q"/>
+      <arg value="SELECT collation_name FROM sys.databases WHERE database_id = DB_ID()"/>
+      <arg value="-o" />
+      <arg value="${folder.temp}\collation.txt" />
+      <arg value="-y0" />
+      <arg value="-s;" />
+      <arg value="-h-1" />
+    </exec>
+	
+	<loadfile file="${folder.temp}\collation.txt" property="database.collation" />
+	<echo message="Collation :: ${database.collation}" />
+	
+	
+    <!-- The purpose of this target is to modify each object (function, procs) to create a dummy changeset first then use ALTER on the following changeset -->
+    <!-- get type for each file -->
+    <exec program="${executable.sqlcmd}"  failonerror="true">
+      <arg value="-E"/>
+      <arg value="-S"/>
+      <arg value="${source.server}"/>
+      <arg value="-d" />
+      <arg value="${database.name}" />
+      <arg value="-i"/>
+      <arg value="${folder.template}\GetObjectType.sql"/>
+      <arg value="-o" />
+      <arg value="${folder.temp}\object-creation.txt" />
+	  <arg value="-v" />
+	  <arg value="collation=${database.collation}" />
+      <arg value="-y0" />
+      <arg value="-s;" />
+      <arg value="-h-1" />
+    </exec>
+
+    <foreach item="Line" in="${folder.temp}\object-creation.txt" delim=";" property="schema,objectname,object,type,params,definition,regex,folder,replacement,username">
+      <property name="folder" value="${folder.build}\${string::trim(folder)}" />
+      <property name="user" value="${string::trim(username)}" />
+
+      <property name="filename" value="${folder}\${string::trim(object)}.sql" />
+
+      <if test="${file::exists(filename)}">
+        <echo message="Processing ${path::get-file-name(filename)} ..." />
+        
+        <loadfile file="${filename}" property="content" encoding="UTF-8"/>
+        <property name="changeset" value="${string::replace(path::get-file-name-without-extension(filename), '.', '-')}" />
+        <property name="changeset" value="${string::replace(changeset, ' ', '-')}" />
+
+        <!-- replace existing CREATE with ALTER -->
+        <regexreplace
+						input="${content}"
+						pattern="${regex}"
+						replacement="${replacement}"
+						property="content"
+						options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <!-- Add object creation -->
+        <regexreplace
+						input="${content}"
+						pattern="--liquibase\sformatted\ssql"
+						replacement="--liquibase formatted sql&#xa;&#xa;--changeSet ${user}:Initial-${changeset}-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false&#xa;${definition}&#xa;GO&#xa;&#xa;"
+						property="content"
+						options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <echo file="${filename}" message="${content}" />
+      </if>
+    </foreach>
+  </target>
+
+  <target name="deploy" depends="drop-target-database" if="${option.deploy}">
+    <exec workingdir="${folder.build}" program="mvn.cmd">
+      <arg value="install" />
+      <arg value="-Ddatabase.server=${target.server}" />
+      <arg value="-Ddatabase.name=${database.name}" />
+      <arg value="-Ddatabase.username=${target.username}" />
+      <arg value="-Ddatabase.password=${target.password}" />
+    </exec>
+  </target>
+
+  <target name="checkout" if="${option.commit}">
+    <exec workingdir="${repo.localpath}" program="${executable.tf}" resultproperty="tf.exitcode" failonerror="false">
+      <arg value="checkout" />
+      <arg value="*.*" />
+      <arg value="/recursive" />
+    </exec>
+
+    <fail unless="${tf.exitcode=='0' or tf.exitcode=='1'}" />
+  </target>
+
+  <target name="copy-to-repo" if="${option.commit}" depends="checkout">
+    <!-- the purpose of this target is to copy the resulting liquibase files to a place on disk where it can be committed to a repository -->
+    <delete>
+      <fileset basedir="${repo.localpath}">
+        <include name="**/*" />
+      </fileset>
+    </delete>
+
+    <copy todir="${repo.localpath}" overwrite="true">
+      <fileset basedir="${folder.build}">
+        <include name="**" />
+      </fileset>
+    </copy>
+  </target>
+
+  <target name="commit" if="${option.commit}" depends="copy-to-repo">
+    <!-- the purpose of this target is to commit the resulting database to the repository -->
+    <exec workingdir="${repo.localpath}" program="${executable.tf}" resultproperty="tf.exitcode" failonerror="false">
+      <arg value="add" />
+      <arg value="*.*" />
+      <arg value="/recursive" />
+    </exec>
+
+    <fail unless="${tf.exitcode=='0' or tf.exitcode=='1'}" />
+
+    <exec workingdir="${repo.localpath}" program="${executable.tf}" resultproperty="tf.exitcode" failonerror="false">
+      <arg value="checkin" />
+      <arg value="*.*" />
+      <arg value="/recursive" />
+      <arg value="/noprompt" />
+      <arg value="/comment:&quot;${checkin.comment}&quot;" />
+    </exec>
+
+    <fail unless="${tf.exitcode=='0' or tf.exitcode=='1'}" />
+
+  </target>
+  
+  <target name="extract-all-triggers" depends="setup-properties">
+      <property name="param.triggertype" value="Table" />
+      <call target="extract-triggers" />
+      
+      <property name="param.triggertype" value="View" />
+      <call target="extract-triggers" />
+  </target>
+
+  <target name="extract-triggers" depends="setup-properties">
+    <fail if="${not property::exists('param.triggertype')}" />
+    
+    <echo message="Extracting trigger of type :: ${param.triggertype}" />
+    
+    <!-- the purpose of this target is to extract all table triggers to a separate update folder -->
+    <property name="trigger.target.folder" value="${folder.build}\${param.triggertype} triggers" />
+    <property name="trigger.source.folder" value="${folder.build}\${param.triggertype}s" />
+    <property name="masterdata.file" value="${trigger.target.folder}\master.xml" />
+    
+    <!-- create header of master file -->
+    <echo file="${masterdata.file}">
+      <![CDATA[<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+	
+	<!-- START OF FILE LIST -->
+]]>
+    </echo>
+
+    <foreach item="File" property="filename">
+      <in>
+        <items basedir="${trigger.source.folder}">
+          <include name="*.sql" />
+        </items>
+      </in>
+      <do>
+        <echo message="Extracting triggers from :: ${filename}" />
+
+        <property name="cc" value="0" />
+        <property name="user" value="${environment::get-user-name()}" />
+
+        <property name="changeset" value="${string::replace(path::get-file-name-without-extension(filename), '.', '-')}" />
+        <property name="changeset" value="${string::replace(changeset, ' ', '-')}" />
+
+        <loadfile file="${filename}" property="source" encoding="UTF-8" />
+        <property name="result" value="${source}" />
+       
+        <!-- remove all liquibase changeset comments from the original file -->
+        <regexreplace
+					input="${result}"
+					pattern="^--changeset.*?$"
+					replacement=""
+					property="result"
+					options="IgnoreCase,IgnorePatternWhitespace,Multiline" />
+
+        <!-- match all triggers up until the next GO statement. be sure to include set options before the trigger -->
+        <regexmatches
+					pattern="(?'total'((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s+(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s+TRIGGER)\s+\[?(?'schema'[a-z|A-Z|0-9|_]*)\]?\.\[?(?'object'[a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO))"
+					input="${result}"
+					options="IgnoreCase,Multiline,Singleline,IgnorePatternWhitespace"
+					failonerror="false">
+
+          <!-- foreach match we have the full trigger in the total variabel, schema and object -->
+          <!-- create the new trigger filename -->
+          <property name="trigger.filename" value="${path::get-file-name-without-extension(filename) + '-' + schema + '.' + object}.sql" />
+
+          <!-- write the trigger to file -->
+          <echo file="${trigger.target.folder}\${trigger.filename}">
+            <![CDATA[--liquibase formatted sql
+
+--changeSet ${user}:Initial-${path::get-file-name-without-extension(filename)}-${schema}-${object}-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+${total}
+					]]>
+          </echo>
+
+          <!-- and add it to the masterdata file in the trigger catalog -->
+          <echo file="${masterdata.file}" append="true">
+            <![CDATA[        <include file="${trigger.filename}" relativeToChangelogFile="true" />
+	]]>
+          </echo>
+          
+        </regexmatches>
+
+        <!-- match all trigger order and move them to separate file -->
+        <property name="param.trigger.order" value="" />
+        <regexmatches
+            pattern="^(?'paramrow'\s*EXEC\s*sp_settriggerorder\s*(N)?'(?'paramfilename'[^']*)'.*?)$"  
+            input="${result}"
+            options="IgnoreCase,Multiline,IgnorePatternWhitespace"
+            failonerror="false">
+            
+           <property name="paramfilename" value="${string::replace(string::replace(paramfilename, '[', ''), ']', '')}" />
+           <property name="param.trigger.order" value="${param.trigger.order}&#xa;${paramrow}" />
+        </regexmatches>
+        
+        <!-- write to new file -->
+        <property name="trigger.order.filename" value="${path::get-file-name-without-extension(filename) + '-trigger-order'}.sql" />        
+        <echo file="${trigger.target.folder}\${trigger.order.filename}" if="${string::get-length(param.trigger.order) > 0}">
+            <![CDATA[--liquibase formatted sql
+
+--changeSet ${user}:Initial-${path::get-file-name-without-extension(filename)}-trigger-order-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+${param.trigger.order}
+					]]>
+        </echo>
+        
+        <!-- Add the order file to the masterdata file -->
+          <echo file="${masterdata.file}" append="true" if="${string::get-length(param.trigger.order) > 0}">
+            <![CDATA[        <include file="${trigger.order.filename}" relativeToChangelogFile="true" />
+	]]>
+          </echo>
+        
+        
+        <!-- remove the triggers from the original file -->
+        <regexreplace
+            input="${result}"
+            pattern="((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)"
+            replacement=""
+            property="result"
+            options="IgnoreCase,Multiline,Singleline,IgnorePatternWhitespace" />
+
+        <regexreplace
+            pattern="^(\s*EXEC\s*sp_settriggerorder\s*(N)?'([^']*)'.*?)$"  
+            input="${result}"
+            replacement=""
+            property="result"
+            options="IgnoreCase,Multiline,IgnorePatternWhitespace"
+            failonerror="false" />
+         
+        <!-- redo the changeset comments -->
+        <regexreplace
+					input="${result}"
+					pattern="((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
+					replacement="&#xa;--changeSet ${user}:Initial-${changeset}-{cc} endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false&#xa;$1&#xa;$6"
+					property="result"
+					options="Multiline,IgnoreCase,IgnorePatternWhitespace,Singleline" />
+
+        <!-- Replace the ${cc} created above with an iterator -->
+        <replaceiterator
+					input="${result}"
+					pattern="{cc}"
+					property="result"
+					options="Multiline,IgnoreCase,IgnorePatternWhitespace" />
+
+        <!-- rewrite the original file without the triggers -->
+        <echo file="${filename}" message="${result}" append="false" />
+      </do>
+    </foreach>
+
+    <!-- create footer of master file -->
+    <echo file="${masterdata.file}" append="true">
+      <![CDATA[	<!-- END OF FILE LIST -->
+</databaseChangeLog>
+]]>
+    </echo>
+
+  </target>
+
+  <target name="copy-parent-pom">
+    <copy file="${folder.repo.base}\pom.xml" todir="${folder.build.parent}" />
+  </target>
+
+  <target name="build" depends="findExecutables,init,setup-redgate-style,setup-db-deploy,handle-invalid-objects
+            ,handle-check-constraints,handle-view-functions
+			,change-object-order,extract-all-triggers,setup-data,fix-data-script
+			,handle-object-creation,copy-parent-pom
+			,deploy,commit">
+
+    <!--
+			 findExecutables,init,setup-redgate-style,setup-db-deploy,handle-invalid-objects
+			,extract-all-triggers
+			,change-object-order,setup-data,fix-data-script
+			,handle-object-creation,handle-check-constraints,handle-view-functions,copy-parent-pom
+			,deploy,commit
+				-->
+  </target>
+
+  <target name="build-packages">
+    <foreach item="String" in="${list.packages}" delim=";" property="param.package">
+      <regex input="${param.package}" pattern="(?'packagename'.*?)\|(?'databases'.*)" />
+      <echo message="package :: ${packagename}" />
+      <echo message="databases :: ${databases}" />
+
+      <property name="modules" value="" />
+      <foreach item="String" in="${databases}" delim="," property="database.module">
+        <regex input="${database.module}" pattern="(?'database'.*?)\:(?'module'.*)" />
+
+        <property name="modules" value="&lt;module&gt;${module}\db&lt;/module&gt;&#xa;   ${modules}" />
+      </foreach>
+
+      <echo message="databases :: ${databases}" />
+      <echo message="modules :: ${modules}" />
+      
+      <copy file="${directory::get-current-directory()}\template_files\parentpom.xml" tofile="${folder.repo.base}\pom.xml">
+        <filterchain>
+          <replacetokens>
+            <token key="MODULES" value="${modules}" />
+            <token key="PACKAGE" value="${string::to-lower(packagename)}" />
+          </replacetokens>
+        </filterchain>
+      </copy>
+
+      <foreach item="String" in="${databases}" delim="," property="database.application">
+        <regex input="${database.application}" pattern="(?'database'.*?)\:(?'module'.*)" />
+
+        <property name="database.name" value="${database}" />
+        <property name="folder.redgate" value="${folder.redgate.base}\${database.name}${redgate.suffix}" />
+        <property name="repo.localpath" value="${folder.repo.base}\${packagename}\Application\${module}\db" />
+
+        <echo message="&#xa;---------------------------------------------------------&#xa;" />
+        <echo message="Database name :: ${database.name}" />
+        <echo message="Redgate folder :: ${folder.redgate}" />
+        <echo message="Repo path :: ${repo.localpath}" />
+
+        <call target="build" />
+      </foreach>
+
+    </foreach>
+  </target>
+
+
+</project>
+ö

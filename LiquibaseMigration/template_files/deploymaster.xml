@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+
+  <include file="deploy/schemas/master.xml" />
+  <include file="deploy/types/master.xml" />
+  <include file="deploy/schema/tables/master.xml" />
+  <include file="deploy/schema/views/master.xml" />     
+  <include file="deploy/procedures/master.xml" />
+  <include file="deploy/functions/master.xml" />
+  <include file="deploy/triggers/master.xml" />
+  <include file="deploy/sequences/master.xml" />
+  <include file="deploy/schema/indexes/master.xml" />
+  <include file="deploy/jobs/master.xml" />
+
+  </databaseChangeLog>

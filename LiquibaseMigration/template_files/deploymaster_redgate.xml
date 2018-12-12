@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd
+    http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+
+  <include file="Deploy/master.xml" />
+  <include file="Security/Users/master.xml" />
+  <include file="Security/Roles/master.xml" />
+  <include file="Security/Schemas/master.xml" />
+  <include file="Security/Asymmetric Keys/master.xml" />
+  <include file="Security/Certificates/master.xml" />
+  <include file="Security/Symmetric Keys/master.xml" />
+  
+  <include file="Assemblies/master.xml" />
+  
+  <include file="Storage/Full Text Catalogs/master.xml" />
+  <include file="Storage/Full Text Stoplists/master.xml" />
+  <include file="Storage/Partition Functions/master.xml" />
+  <include file="Storage/Partition Schemes/master.xml" />
+  
+  <include file="Rules/master.xml" />
+  <include file="Types/User-defined Data Types/master.xml" />
+  <include file="Types/XML Schema Collections/master.xml" />
+
+  <include file="ConstraintFunctions/master.xml" />  
+  <include file="Tables/master.xml" />
+  <include file="Views/master.xml" /> 
+  
+  <include file="Table triggers/master.xml" />
+  <include file="View triggers/master.xml" />  
+  
+  <include file="Data/master.xml" />
+  <include file="Database Triggers/master.xml" />
+  <include file="Defaults/master.xml" />
+  <include file="Extended Properties/master.xml" />
+  <include file="Functions/master.xml" />
+  
+  <include file="Search property Lists/master.xml" />
+ 
+  <include file="Sequences/master.xml" />
+  
+  <include file="Service Broker/Contracts/master.xml" />
+  <include file="Service Broker/Event Notifications/master.xml" />
+  <include file="Service Broker/Message Types/master.xml" />
+  <include file="Service Broker/Queues/master.xml" />
+  <include file="Service Broker/Remote Service Bindings/master.xml" />
+  <include file="Service Broker/Routes/master.xml" />
+  <include file="Service Broker/Services/master.xml" />
+    
+  <include file="Stored Procedures/master.xml" />
+  <include file="Synonyms/master.xml" />
+
+</databaseChangeLog>

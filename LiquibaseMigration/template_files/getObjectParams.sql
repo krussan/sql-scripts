@@ -1,0 +1,22 @@
+;WITH CTE AS (
+SELECT *, params=
+   PARAMETER_NAME + ' ' + DATA_TYPE +
+     CASE 
+      WHEN DATA_TYPE LIKE '%char%' AND CHARACTER_MAXIMUM_LENGTH = - 1 THEN '(MAX)'
+      WHEN DATA_TYPE LIKE '%char%' THEN '(' + CONVERT(varchar(10), CHARACTER_MAXIMUM_LENGTH) + ')'
+      WHEN NUMERIC_PRECISION IS NOT NULL AND data_type <> 'float' THEN '(' + CONVERT(varchar(10), NUMERIC_PRECISION) + ',' + CONVERT(varchar(10),NUMERIC_SCALE) + ')'
+      ELSE ''
+     END
+FROM INFORMATION_SCHEMA.PARAMETERS
+WHERE 1=1
+AND SPECIFIC_SCHEMA = '$(schema)'
+AND SPECIFIC_NAME = '$(object)'
+AND ORDINAL_POSITION > 0
+)
+SELECT params = STUFF(
+	(SELECT N',' + params as [text()] 
+	FROM (
+	   SELECT params FROM CTE
+) AS importColumns
+FOR XML PATH('')),1,1,N'');
+
