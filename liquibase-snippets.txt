@@ -1,0 +1,55 @@
+-------------
+-- HEADER >--
+-------------
+--liquibase formatted sql
+
+--changeSet thunsch:Initial-<schema>-<table>-1 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false
+
+---------------
+--< INCLUDE >--
+---------------
+Before cursor:
+<include file="
+
+After cursor:
+" relativeToChangelogFile="true" />
+
+---------------
+--< PROC    >--
+---------------
+Before cursor:
+--liquibase formatted sql
+
+--changeSet proc:Initial-<schema>-<procedure>-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:true
+IF OBJECT_ID('<schema>.<procedure>', 'P') IS NULL EXEC('CREATE PROCEDURE [<schema>].[<procedure>] AS BEGIN SELECT ret = 1 END')
+GO
+
+ALTER PROCEDURE [<schema>].[<procedure>]
+AS
+BEGIN
+
+
+
+After cursor:
+
+END
+GO
+
+------------------
+--< TABLE FUNC >--
+------------------
+Before cursor:
+--liquibase formatted sql
+
+--changeSet func:Initial-<schema>-<func>-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:true
+IF OBJECT_ID('<schema>.<func>', 'IF') IS NULL EXEC('CREATE FUNCTION [<schema>].[<func>](@gacc char(17)) RETURNS TABLE AS RETURN (SELECT ret = 1)')
+GO
+
+
+GO
+ALTER FUNCTION [<schema>].[<func>] (@gacc CHAR(17)) RETURNS TABLE AS RETURN 
+(
+
+After cursor:
+)
+GO
