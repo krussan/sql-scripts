@@ -35,7 +35,7 @@ echo.!SERVER!,!USERNAME!,!PASS!>"!LIQUIBASE_PROFILE!"
 goto exec
  
 :exec
-mvn compile -Ddatabase.server=!SERVER! -Ddatabase.username=!USERNAME! -Ddatabase.password=!PASS!
+mvn install -Ddatabase.server=!SERVER! -Ddatabase.username=!USERNAME! -Ddatabase.password=!PASS!
 GOTO xit
 
 
