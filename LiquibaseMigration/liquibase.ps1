@@ -194,7 +194,7 @@ function createChangesets([string]$result,[string]$user,[string]$runonchange) {
 	# Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP
 	# pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
 	$regex = New-Object System.Text.RegularExpressions.Regex ( `
-		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE|ALTER|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP)", `
+		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP\s)", `
 		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
@@ -677,7 +677,7 @@ $triggerOrder
 (ON|OFF)\s*
 ((GO)\s*)*
 )*)
-\s*(CREATE|ALTER|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP)(?!_EXISTING)
+\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s+(sys\.){0,1}sp_addextendedproperty|DROP\s)(?!_EXISTING)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
