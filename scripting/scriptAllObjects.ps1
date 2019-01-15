@@ -43,6 +43,8 @@ $FolderMap = @{
 	"Views" = "Views"
 }
 
+$alwaysExclude = @{"Roles" = "db_accessadmin", "db_backupoperator", "db_datareader", "db_datawriter", "db_ddladmin", "db_denydatareader", "db_denydatawriter", "db_owner", "db_securityadmin"}
+
 [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | out-null
 $srv = New-Object ('Microsoft.SqlServer.Management.Smo.Server') $server
  
@@ -92,6 +94,9 @@ foreach ($Type in $IncludeTypes)
 {
 	write-host "Processing type :: $Type"
 	$typeFolder = $FolderMap[$Type];
+	
+	$totalExclude = $alwaysExclude[$Type] + $excludeRegex
+	
 	if (!$typeFolder) {
 		$typeFolder = $Type
 	}
@@ -111,7 +116,7 @@ foreach ($Type in $IncludeTypes)
 			$ObjName = "$objs".replace("[", "").replace("]", "")
 			
 			$ismatch = $false;
-			foreach ($pattern in $excludeRegex) {
+			foreach ($pattern in $totalExclude) {
 				$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				$pattern, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `

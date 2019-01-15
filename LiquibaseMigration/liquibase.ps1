@@ -73,6 +73,16 @@ function build(
 	extractAllTriggers $buildFolder
 	setupData $buildFolder $server $database
 	handleObjectCreation $buildFolder $server $database
+	
+	copyBatchFiles $buildFolder
+}
+
+function copyBatchFiles(
+	[string]$buildFolder) {
+
+	Copy-Item -Path "template_files\liquiploy.bat" -Destination "$buildFolder"
+	Copy-Item -Path "template_files\liquitest.bat" -Destination "$buildFolder"
+	
 }
 
 function getFolders([bool]$includeUsers) {
@@ -132,12 +142,6 @@ function buildPackages(
 		if ($arrA.Length -eq 2) {
 			$packageName = $arrA[0];
 			$databases = $arrA[1];
-			
-			foreach ($m in $databases.Split(",")) {
-				
-			}
-			
-		
 		
 			foreach ($db in $databases) {
 				write-host $db
@@ -162,6 +166,7 @@ function buildPackages(
 			(Get-Content template_files\parentpom.xml -Encoding UTF8 -Raw).replace("@MODULES@", $modules).replace("@PACKAGE@", $packageName + "-parent").replace("@GROUPID@", $groupId)  | Set-Content -Path "$buildFolderParent\pom.xml" -Encoding UTF8
 			
 			New-Item -ItemType Directory -Path "$buildFolderParent\scripts" -Force | out-null
+			
 			Copy-Item -Path "template_files\StartDeploy.sql" -Destination "$buildFolderParent\scripts"
 			Copy-Item -Path "template_files\CompleteDeploy.sql" -Destination "$buildFolderParent\scripts"
 			
