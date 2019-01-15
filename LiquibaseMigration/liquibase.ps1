@@ -199,7 +199,7 @@ function createChangesets([string]$result,[string]$user,[string]$runonchange) {
 	# Add changeset comments to each update. Separated with CREATE, ALTER, EXEC or DROP
 	# pattern="^(\s*)(CREATE|ALTER|EXEC\s*sp_addextendedproperty|DROP)"
 	$regex = New-Object System.Text.RegularExpressions.Regex ( `
-		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP\s)", `
+		"((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)*?^\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s*(sys\.){0,1}sp_addextendedproperty|DROP\s|(DIS|EN)ABLE\s+TRIGGER)", `
 		([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 		-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
@@ -268,7 +268,7 @@ function removeMisc([string]$result,[bool]$includeUsers) {
 	
 	## Remove all USE statements
 	$regex = New-Object System.Text.RegularExpressions.Regex ( `
-			"^USE\s+\[?(.*?)\]?\s*GO", `
+			"^USE\s+\[?(.*?)\]?\s*^GO", `
 			([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 			-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
 			-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace `
@@ -285,7 +285,7 @@ function replaceJunk([string]$result) {
 		@"
 (
 	(
-		SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)
+		SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)
 		\s+(ON|OFF)
 		(\s*GO)*
 		\s*
@@ -599,7 +599,7 @@ function extractTriggers([string]$triggerType,[string]$buildFolder,[string]$runo
 		# match all triggers up until the next GO statement. be sure to include set options before the trigger
 		$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				@"
-(?<total>((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s+(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s+TRIGGER)\s+\[?(?<schema>[a-z|A-Z|0-9|_]*)\]?\.\[?(?<object>[a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO))				
+(?<total>((SET\s+(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s+(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s+TRIGGER)\s+\[?(?<schema>[a-z|A-Z|0-9|_]*)\]?\.\[?(?<object>[a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO))				
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
@@ -659,7 +659,7 @@ $triggerOrder
 		# remove the triggers from the original file 
 		$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				@"
-((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)
+((SET\s*(ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*(ON|OFF)(\s*GO\s*))*)^\s*(CREATE\s*TRIGGER)\s*\[?([a-z|A-Z|0-9|_]*)\]?\.\[?([a-z|A-Z|0-9|_]*)\]?.*?^GO(?!TO)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
@@ -678,11 +678,11 @@ $triggerOrder
 		$regex = New-Object System.Text.RegularExpressions.Regex ( `
 				@"
 ((
-(SET\s*(ANSI_NULLS|ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*)
+(SET\s*(ANSI_NULLS|ANSI_DEFAULTS|ANSI_NULL_DFLT_OFF|ANSI_NULL_DFLT_ON|ANSI_NULLS|ANSI_PADDING|CONCAT_NULL_YIELDS_NULL|CURSOR_CLOSE_ON_COMMIT|QUOTED_IDENTIFIER)\s*)
 (ON|OFF)\s*
 ((GO)\s*)*
 )*)
-\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s+(sys\.){0,1}sp_addextendedproperty|DROP\s)(?!_EXISTING)
+\s*(CREATE\s|ALTER\s|EXEC(UTE){0,1}\s+(sys\.){0,1}sp_addextendedproperty|DROP\s|(DIS|EN)ABLE\s+TRIGGER)(?!_EXISTING)
 "@, `
 				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
 				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `

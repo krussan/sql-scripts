@@ -43,7 +43,10 @@ $FolderMap = @{
 	"Views" = "Views"
 }
 
-$alwaysExclude = @{"Roles" = "db_accessadmin", "db_backupoperator", "db_datareader", "db_datawriter", "db_ddladmin", "db_denydatareader", "db_denydatawriter", "db_owner", "db_securityadmin"}
+$alwaysExclude = @{
+	"Roles" = "db_accessadmin", "db_backupoperator", "db_datareader", "db_datawriter", "db_ddladmin", "db_denydatareader", "db_denydatawriter", "db_owner", "db_securityadmin"
+	"Tables" = "sysdiagrams"
+}
 
 [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.SqlServer.SMO') | out-null
 $srv = New-Object ('Microsoft.SqlServer.Management.Smo.Server') $server
