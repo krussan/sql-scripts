@@ -1,8 +1,15 @@
-DECLARE @schema sysname = 'dbo'
-DECLARE @table sysname = 'table'
+set nocount on
+go
+
+DECLARE @schema sysname = parsename('$(DataTable)', 2)
+DECLARE @table sysname = parsename('$(DataTable)', 1)
+declare @generateLiquibaseHeader bit = $(GenerateLiquibaseHeader)
+declare @username sysname = '$(UserName)'
+declare @hasIdentity bit;
+
 DECLARE @SQL nvarchar(MAX);
 
-SELECT @schema + '.' + @table, OBJECT_ID(@schema + '.' + @table)
+--SELECT @schema + '.' + @table, OBJECT_ID(@schema + '.' + @table)
 --Check for primary key
 --Check for unique key
 --Add if exists on primarykey/unique/all columns
@@ -26,10 +33,11 @@ WHERE object_id = OBJECT_ID(@schema + '.' + @table)
 
 */
 
-DECLARE @columnList nvarchar(MAX);
+IF OBJECT_ID('tempdb..#tmp') IS NOT NULL DROP TABLE #tmp
 
-DECLARE C CURSOR FAST_FORWARD READ_ONLY FOR
-SELECT columnList, insertList, TABLE_SCHEMA, TABLE_NAME
+DECLARE @columnList nvarchar(MAX);
+SELECT columnList, insertList, TABLE_SCHEMA, TABLE_NAME, hasIdentity
+into #tmp
 FROM INFORMATION_SCHEMA.TABLES T
 CROSS APPLY (
 	SELECT columnList = stuff(
@@ -48,13 +56,13 @@ CROSS APPLY (
 		FROM (
 		SELECT columnFunction = 
 			CASE 
-				WHEN DATA_TYPE LIKE '%char%' OR DATA_TYPE LIKE '%date%' THEN 
-					CASE WHEN IS_NULLABLE = 'YES' THEN 'COALESCE('''''''' + ' + QUOTENAME(COLUMN_NAME) + ' + '''''''', ''NULL'')'
-					ELSE ''''''''' + ' + QUOTENAME(COLUMN_NAME) + ' + '''''''''
+				WHEN DATA_TYPE LIKE '%char%' OR DATA_TYPE LIKE '%date%' OR DATA_TYPE LIKE '%time%' THEN 
+					CASE WHEN IS_NULLABLE = 'YES' THEN 'COALESCE('''''''' + REPLACE(' + QUOTENAME(COLUMN_NAME) + ', '''''''', '''''''''''') + '''''''', ''NULL'')'
+					ELSE ''''''''' + REPLACE(' + QUOTENAME(COLUMN_NAME) + ', '''''''', '''''''''''') + '''''''''
 					END
 				WHEN DATA_TYPE LIKE '%int%' OR DATA_TYPE = 'decimal' OR DATA_TYPE = 'numeric' OR DATA_TYPE = 'bit' THEN 
-					CASE WHEN IS_NULLABLE='YES' THEN 'CONVERT(varchar(30), ' + QUOTENAME(COLUMN_NAME) + ')' 
-					ELSE 'COALESCE(CONVERT(varchar(30), ' + QUOTENAME(COLUMN_NAME) + '), ''NULL'')' 
+					CASE WHEN IS_NULLABLE='YES' THEN 'COALESCE(CONVERT(varchar(30), ' + QUOTENAME(COLUMN_NAME) + '), ''NULL'')' 
+					ELSE 'CONVERT(varchar(30), ' + QUOTENAME(COLUMN_NAME) + ')' 
 					END
 				ELSE NULL 
 			END
@@ -66,22 +74,54 @@ CROSS APPLY (
 	ORDER BY ORDINAL_POSITION
 	FOR XML PATH('')),1,9,N'')
 ) CCI
+cross apply (
+	select hasIdentity = case when exists (select is_identity
+	from sys.columns
+	where object_id = object_id(T.TABLE_SCHEMA + '.' + T.TABLE_NAME)
+	and is_identity = 1) then 1 else 0 end
+) HID
 WHERE T.TABLE_NAME LIKE @table AND T.TABLE_SCHEMA LIKE @schema
+	and T.TABLE_TYPE = 'BASE TABLE'
 ORDER BY T.TABLE_SCHEMA, T.TABLE_NAME
 
+DECLARE C CURSOR FAST_FORWARD READ_ONLY FOR
+select columnList, insertList, TABLE_SCHEMA, TABLE_NAME, hasIdentity
+from #tmp
+
+DECLARE @cmd nvarchar(MAX);
+
 OPEN C
-FETCH NEXT FROM C INTO @columnList, @SQL, @schema, @table
+FETCH NEXT FROM C INTO @columnList, @SQL, @schema, @table, @hasIdentity
 WHILE @@FETCH_STATUS = 0
 BEGIN
-      
-	  PRINT @columnList
-	  PRINT @SQL
-	  SET @SQL = 'SELECT ''INSERT INTO ' + QUOTENAME(@schema) + '.' + QUOTENAME(@table) + ' (' + @columnList + ') VALUES ('' + ' + @SQL  + N' + '')'' FROM ' + QUOTENAME(@schema) + '.' + QUOTENAME(@table);
-	  PRINT @SQL
-	
+
+   if @generateLiquibaseHeader = 1
+   BEGIN
+	  set @cmd ='--liquibase formatted sql
+
+--changeSet ' + @username + ':Initial-' + @schema + '-' + REPLACE(REPLACE(@table, '.', '-'), '_', '-') + '-0 endDelimiter:\nGO splitStatements:true stripComments:false runOnChange:false'
+	  print @cmd
+	  
+   end
+
+   if @hasIdentity = 1 
+   begin
+	  set @cmd = 'SET IDENTITY_INSERT ' + quotename(@schema) + '.' + quotename(@table) + ' ON;'
+	  print @cmd
+   end
+   
+   SET @SQL = 'SELECT ''INSERT INTO ' + QUOTENAME(@schema) + '.' + QUOTENAME(@table) + ' (' + @columnList + ') VALUES ('' + ' + @SQL  + N' + '')'' FROM ' + QUOTENAME(@schema) + '.' + QUOTENAME(@table);
+
+   --print @sql
    EXEC sp_executesql @SQL
 
-   FETCH NEXT FROM C INTO @columnList, @SQL, @schema, @table
+   if @hasIdentity = 1 
+   begin
+	  set @cmd = 'SET IDENTITY_INSERT ' + quotename(@schema) + '.' + quotename(@table) + ' OFF;'
+	  print @cmd
+   end
+
+   FETCH NEXT FROM C INTO @columnList, @SQL, @schema, @table, @hasIdentity
 END
 CLOSE C
 DEALLOCATE C
