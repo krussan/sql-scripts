@@ -231,6 +231,9 @@
 				<include>**/*.sql</include>
 				<include>**/*.xml</include>
 			</includes>
+			<excludes>
+				<exclude>generated-sources/**</exclude>
+			</excludes>
 			<basedir>${basedir}</basedir>
 			<outputDir>generated-sources</outputDir>
 			<preserveDir>true</preserveDir>
