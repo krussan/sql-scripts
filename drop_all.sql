@@ -8,6 +8,11 @@ IF OBJECT_ID('tempdb..#stmt') IS NOT NULL DROP TABLE #stmt
 CREATE TABLE #stmt (ID int IDENTITY(1, 1), stmt VARCHAR(MAX))
 
 INSERT INTO #stmt (stmt)
+select 'DROP TRIGGER ' + quotename(name) + ' ON DATABASE'
+from sys.triggers
+where parent_class_desc = 'DATABASE'
+
+INSERT INTO #stmt (stmt)
 SELECT 'EXEC sp_droprolemember ''' + R.name + ''', ''' + P.name + ''''
 FROM sys.database_role_members M
 INNER JOIN sys.database_principals R ON M.role_principal_id = R.principal_id
@@ -79,6 +84,11 @@ SELECT 'DROP PARTITION SCHEME ' + QUOTENAME(name) FROM sys.partition_schemes
 
 INSERT INTO #stmt (stmt)
 SELECT 'DROP PARTITION FUNCTION ' + QUOTENAME(name) FROM sys.partition_functions
+
+INSERT INTO #stmt (stmt)
+select 'DROP ASSEMBLY ' + quotename(name)
+from sys.assemblies
+where is_user_defined = 1
 
 SELECT * FROM #stmt ORDER BY ID ASC
 
