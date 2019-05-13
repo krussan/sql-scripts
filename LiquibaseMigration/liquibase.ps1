@@ -122,7 +122,7 @@ function init([string]$buildFolderParent,[string]$buildFolder,[string]$groupId,[
 	
 	Get-ChildItem $buildFolderParent -Recurse |
 		Where-Object {$_.GetType().ToString() -eq "System.IO.FileInfo"} |
-		Set-ItemProperty -Name IsReadOnly -Value $false
+		Set-ItemProperty -Name IsReadOnly -Value $false | out-null
 
 }
 
@@ -428,11 +428,11 @@ function handleObjectMove([string]$sqlFile,[string]$sourceFolder,[string]$target
 		-OutputAs DataRows -QueryTimeout $QUERY_TIMEOUT
 	
 	foreach ($r in $rows) {
-		$f = Get-Item ($sourceFolder + "\" + $r.fullName + ".sql")
+		$file = $sourceFolder + "\" + $r.fullName + ".sql"
+		Write-host "Object Move :: " + $file
 		
-		Write-host "Object Move :: $filename"
-		
-		if (Test-Path $f.FullName) {
+		if (Test-Path $file) {
+			$f = Get-Item ($file)
 			$filename = $f.Name
 			Write-host "... Moving ..."
 			Move-Item -Path $f.FullName -Destination $targetFolder

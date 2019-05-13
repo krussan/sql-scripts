@@ -99,6 +99,16 @@ foreach ($Type in $IncludeTypes)
 	$typeFolder = $FolderMap[$Type];
 	
 	$totalExclude = $alwaysExclude[$Type] + $excludeRegex
+	$allRegex = @()
+	
+	foreach ($pattern in $totalExclude) {
+		write-host $pattern
+		$allRegex += New-Object System.Text.RegularExpressions.Regex ( `
+				$pattern, `
+				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
+				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
+	}
 	
 	if (!$typeFolder) {
 		$typeFolder = $Type
@@ -119,13 +129,7 @@ foreach ($Type in $IncludeTypes)
 			$ObjName = "$objs".replace("[", "").replace("]", "")
 			
 			$ismatch = $false;
-			foreach ($pattern in $totalExclude) {
-				$regex = New-Object System.Text.RegularExpressions.Regex ( `
-				$pattern, `
-				([System.Text.RegularExpressions.RegexOptions]::MultiLine `
-				-bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase `
-				-bor [System.Text.RegularExpressions.RegexOptions]::IgnorePatternWhitespace))
-				
+			foreach ($regex in $allRegex) {				
 				if ($regex.IsMatch($ObjName)) {
 					$ismatch = $true
 					break;
