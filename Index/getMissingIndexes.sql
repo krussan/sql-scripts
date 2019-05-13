@@ -4,7 +4,7 @@ declare @sql nvarchar(max);
 IF OBJECT_ID('tempdb..#indexes') IS NOT NULL DROP TABLE #indexes
 create table #indexes (databaseId int, object_id int, type tinyint, type_desc varchar(100))
 
-set @sql = 'insert into #indexes exec sp_msforeachdb ''select DB_ID(''''?''''), object_id, type, type_desc from sys.indexes'''
+set @sql = 'insert into #indexes exec sp_msforeachdb ''select DB_ID(''''?''''), object_id, type, type_desc from [?].sys.indexes'''
 
 exec (@sql)
 
