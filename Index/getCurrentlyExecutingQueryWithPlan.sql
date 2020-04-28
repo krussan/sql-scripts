@@ -21,12 +21,14 @@ SELECT
    sder.reads AS [Reads],
    sder.writes AS [Writes],
    sder.logical_reads AS [Logical Reads],
-   DEQP.query_plan
+   DEQP.query_plan,
+   STAT.query_plan as live_query_plan
 FROM sys.dm_exec_requests sder WITH (NOLOCK, READUNCOMMITTED)
 CROSS APPLY sys.dm_exec_sql_text(sql_handle) AS sdet  
 JOIN sys.dm_exec_sessions sdes WITH (NOLOCK, READUNCOMMITTED) on sder.session_id = sdes.session_id
 JOIN sys.databases sd  WITH (NOLOCK, READUNCOMMITTED) ON sder.database_id = sd.database_id
 OUTER APPLY sys.dm_exec_query_plan(sder.plan_handle) AS DEQP
+outer apply sys.dm_exec_query_statistics_xml(sder.session_id) STAT
 WHERE
 sder.session_id <> @@SPID and sder.session_id > 50
 GO
